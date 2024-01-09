@@ -2,7 +2,7 @@ import os
 
 M = "M"
 L = "L"
-OPENING = "<svg width='256' height='256' xmlns='http://www.w3.org/2000/svg'>"
+OPENING = "<svg width='256' height='64' xmlns='http://www.w3.org/2000/svg'>"
 BASE_STYLING = "<style>text {font: 5px sans-serif; fill: white;}</style>"
 CLOSING = "</svg>"
 
