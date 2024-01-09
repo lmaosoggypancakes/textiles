@@ -1,0 +1,4 @@
+paths
+*.net
+*.svg
+__pycache__
