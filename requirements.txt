@@ -1,0 +1,3 @@
+streamlit 
+streamlit_shadcn_ui
+kinparse
