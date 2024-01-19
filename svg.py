@@ -2,7 +2,6 @@ import os
 
 M = "M"
 L = "L"
-OPENING = "<svg width='256' height='64' xmlns='http://www.w3.org/2000/svg'>"
 BASE_STYLING = "<style>text {font: 5px sans-serif; fill: white;}</style>"
 CLOSING = "</svg>"
 
@@ -24,9 +23,9 @@ class SVG:
         self.draw += f"<text x='{x}' y='{y}' class='small'>{text}</text>"
     def save(self, filename):
         with open(filename, "w") as file:
-            file.write(OPENING + BASE_STYLING + self.draw + CLOSING)
+            file.write(str(self))
             file.close()
         return filename
 
     def __str__(self):
-        return OPENING + BASE_STYLING + self.draw + CLOSING
+        return f"<svg width='{self.x}' height='{self.y}' xmlns='http://www.w3.org/2000/svg'>" + BASE_STYLING + self.draw + CLOSING
