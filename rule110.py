@@ -42,9 +42,9 @@ def print_grid(generations):
         print(s)
 
 def export_grid_to_svg(grid):
-    x = len(grid[0]) * 20
-    y = len(grid) * 50
-    star_length = y / 450
+    x = len(grid[0]) * 4+12
+    y = len(grid) * 4+12
+    star_length = 2
 
     svg = SVG(x,y)
     cursor_x = 10
@@ -60,14 +60,16 @@ def export_grid_to_svg(grid):
                 long_stretch = (cursor_x, cursor_y)
             elif col == 1:
                 if on_a_long_stretch:
+                    if row == grid[0]:
+                        cursor_x= long_stretch[0]+ star_length/2-3
                     instructions.append((M, long_stretch[0],long_stretch[1]))
                     on_a_long_stretch = False
                 # do a little circle thing around this point
                 instructions.extend([(M, cursor_x-star_length/2, cursor_y-star_length/2), (L, cursor_x - star_length/2, cursor_y+star_length/2), (L, cursor_x+star_length/2, cursor_y + star_length/2), (L, cursor_x+star_length/2, cursor_y-star_length/2), (L, cursor_x-star_length/2, cursor_y-star_length/2)])
-            cursor_x += 5
+            cursor_x += 4
         instructions.append((M, 10, cursor_y))
-        cursor_x = 10
-        cursor_y += 10
+        cursor_x = star_length+2
+        cursor_y += star_length+2
     svg.path(instructions)
 
     return svg
