@@ -25,9 +25,9 @@ def create_n_zigzag(n, one="", two="", horizontal = True) -> SVG:
         svg.text(X, 30, two)
     svg.circle(3,10,2)
     if n % 2 == 0:
-        svg.circle(cursor_x, 10, 2)
+        svg.circle(cursor_x, 10, 2, "none")
     else: 
-        svg.circle(cursor_x, 20, 2)
+        svg.circle(cursor_x, 20, 2, "none")
     return svg
 
 def total_energy(connections):
@@ -36,39 +36,22 @@ def total_energy(connections):
         s += c.spring_energy()
     return s
 
-def create_n_zigzag_better(n, one,two, svg=None):
-    """
-    Given a diagonal from (x1,y1) <> (x2,y2), create an n-zigzag according to those diagonals.
-    ref: https://www.desmos.com/calculator/b8tq1khfwd
-    """
-    (x1, y1) = one
-    (x2, y2) = two
 
-    dx = x2 - x1
-    dy = y2 - y1
 
-    step_x = dx/n
-    step_y = dy/n
+def render_graph(nodes, connections, stretchification, zig):
+    max_x = max(map(lambda x: x.x, nodes))
+    max_y = max(map(lambda y: y.y, nodes))
+    min_x = min(map(lambda x: x.x, nodes))
+    min_y = min(map(lambda y: y.y, nodes))
+    max_length = max(map(lambda c: c.get_length(), connections))
     
-    points = []
-    magnitude_of_zig = abs((dx + dy) / 32)
-    for i in range(1,n):
-        x = (x1) + (i * step_x) + (magnitude_of_zig * ((-1) ** (i+1)))
-        y = (y1) + (i * step_y) + (magnitude_of_zig * ((-1) ** (i)))
-        points.append((x,y))
-    if not svg:
-        m = max([x1,x2,y1,y2])
-        svg = SVG(m+200,m+200)
+    # -> how do we normalize coordinates to respect proportions without having an absurd size?
+    svg = SVG(max_x-min_x + 100, max_y-min_y + 50)
+    for node in nodes:
+        node.x = max_x-node.x+20
+        node.y = max_y - node.y + 20
+        svg.circle(node.x,node.y,4,fill='none')
+    for connection in connections:
+        svg.create_n_zigzag((connection.one.x, connection.one.y), (connection.two.x, connection.two.y), stretchification,zig_size=zig, svg=svg)
     
-    svg.circle(x1,y1,3)
-    svg.circle(x2,y2,3)
-    instructions = [(M, x1,y1)]
-    for (x,y) in points:
-        instructions.append((L, x,y))
-
-    instructions.append((L, x2,y2))
-    svg.path(instructions)
     return svg
-
-def render_graph(nodes, connections):
-    pass

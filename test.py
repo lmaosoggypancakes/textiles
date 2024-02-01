@@ -74,9 +74,9 @@ def test_physical_connections():
         p2.next_state([force2])
 
 def test_better_points():
-    x1,y1 = 10,10
-    x2,y2 = 20, 20
-    create_n_zigzag_better(10,(x1,y1), (x2,y2)).save("ziggs.svg")
+    x1,y1 = 100,100
+    x2,y2 = 10,100
+    SVG.create_n_zigzag((x1,y1), (x2,y2), 10).save("ziggs.svg")
 def main():
     # test_svg()
     # create_n_zigzag(16, "", "").save("paths/funny.svg")

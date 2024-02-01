@@ -6,9 +6,9 @@ from helpers import *
 import random
 from graphs import *
 from springs import *
+from processing import *
 import matplotlib.pyplot as plt
 import copy
-import time
 
 if 'nodes' not in st.session_state:
     st.session_state['nodes'] = []
@@ -22,10 +22,12 @@ if file is not None:
     data = file.read().decode("utf-8")
     netlist = parse_netlist(data)
     # create nodes
+    radius=100
     if len(nodes) == 0: 
-        for part in netlist.parts:
-            x = random.random()*100+10
-            y = random.random()*100
+        for (i,part) in enumerate(netlist.parts):
+            angle = 2 * math.pi * i/len(netlist.parts)
+            x = 400+radius+math.cos(angle)
+            y = 400+radius+math.cos(angle)
             nodes.append(PhysicalNode(x, y, part.ref))
     with st.container():
 
@@ -45,15 +47,17 @@ if file is not None:
             elif len(connection.pins) == 1:
                 st.write(f"""- {connection.name}, {connection.pins[0].ref} (OPEN)""")
         st.divider()
-        stretchification = ui.slider(default_value=[4], min_value=1, max_value=18, step=1, label="Stretchification", key="slider1")
-        st.write(f"### {stretchification[0]}")
         # messing around with this for a bit
         # if n = stretchification on a given connection of length x, we convert the straight line to an equation of y=sin(nt), 0<=t<=x
         # given y=sin(nt) which is continous, to convert to point-to's we sample 2n-times (peak-to-peak), so ~~~ becomes /\/\/\/\/\/\/\/\
         # how do we determine x? for now, arbitrarily choose x as some fixed constant for all connections (hopefully i can find someway to get the connection length/direction)
         # we can try sampling more for a more continous line, however
         # TODO: given this, draw and display the SVG file
-        if st.button("Optimize"):
+        
+        optimize, simulate  = st.tabs(["Optimize", "Simulate"])
+        with optimize:
+            if st.button("Shuffle"):
+                random.shuffle(nodes)
             with st.spinner("Calculating"):
                 best_energy = float("inf")
                 best_nodes = []
@@ -80,24 +84,22 @@ if file is not None:
                         best_nodes = new_nodes
                         best_connections = new_connections
                     
-                for node in best_nodes:
-                    plt.text(node.x, node.y+2,  node.ref)
-                for c in best_connections:
-                    plt.plot((c.one.x,c.two.x), (c.one.y,c.two.y), color='blue')
-
-                x_points = list(map(lambda x: x.x, best_nodes))
-                y_points = list(map(lambda y: y.y, best_nodes))
-                # Plotting a line
-                # Plotting points
-                plt.scatter(x_points, y_points, color='red', label='Components')
                 # plt.axis((min(x_points)-20,max(x_points)+20,min(y_points)-20,max(y_points)+20))
                 # plt.plot(x_points, y_points, color='blue', linestyle='dashed', label='Line')
                 # Adding labels and a legend
-                fig = st.pyplot(plt,use_container_width=False)
-                st.write(f"## Best energy: {best_energy} J")
+                st.write(f"## Best energy: {  round(best_energy)} J")
+                stretchification = st.slider("Stretchification", value=4, min_value=1, max_value=50, step=1, key="optimize_slider")
+                zig_size = st.slider("Zigzag size", 1.0, 5.0, 1.0   , 0.1)
+                rendered = render_graph(best_nodes,best_connections,stretchification,zig_size)
+                st.image(str(rendered), use_column_width=True)
+                st.download_button("Download SVG", str(rendered), "text/svg")
+                st.download_button("Export to PEmbroider", export_svg_to_processing(rendered), "funny.pde")
+                
 
-        if st.button("Simulate"):
-            t = st.slider('Time (ms)', 0, 100, 0)  
+        with simulate:
+            t = st.slider('Time (ms)', 0, 100, 0)
+            stretchification = st.slider("Stretchification", value=4, min_value=1, max_value=18, step=1, key="simulate_slider")
+            zig_size = st.slider("Zigzag size", 1.0, 5.0, 1.0, 0.1, key="zig_simulate")
             nodes_copied = copy.deepcopy(nodes)
             connections_copied = []
             for conn in netlist.nets:
@@ -113,24 +115,15 @@ if file is not None:
                     forces = list(map(lambda x: x.spring_force_vector(node), connected))
                     node.next_state(forces)
 
-            print(nodes_copied)
             for node in nodes_copied:
                 plt.text(node.x, node.y+2,  node.ref)
                 # pass
             for c in connections_copied:
                 plt.plot((c.one.x,c.two.x), (c.one.y,c.two.y), color='blue')
 
-            st.write(f"### Graph energy: {round(total_energy(connections_copied),2)}J")
-            x_points = list(map(lambda x: x.x, nodes_copied))
-            y_points = list(map(lambda y: y.y, nodes_copied))
-            # Plotting a line
-            # Plotting points
-            plt.scatter(x_points, y_points, color='red', label='Components')
-            # plt.axis((min(x_points)-20,max(x_points)+20,min(y_points)-20,max(y_points)+20))
-            # plt.plot(x_points, y_points, color='blue', linestyle='dashed', label='Line')
-            # Adding labels and a legend
-            fig = st.pyplot(plt,use_container_width=False, clear_figure=True)
-    
+            st.write(f"### Graph energy: {round(total_energy(connections_copied))}J")
+            rendered = render_graph(nodes_copied, connections_copied, stretchification, zig_size)
+            st.image(str(rendered), use_column_width=True)
         # Display the graph
         
         # with st.spinner("Stretchifying..."):

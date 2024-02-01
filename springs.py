@@ -52,7 +52,6 @@ class PhysicalNode:
         return (self.x, self.y)
 
     def get_connections(self):
-        print(PhysicalConnection.all_connections)
         found = []
         for c in PhysicalConnection.all_connections:
             if (c.one == self or c.two == self):

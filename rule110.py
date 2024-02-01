@@ -62,7 +62,7 @@ def export_grid_to_svg(grid):
                 if on_a_long_stretch:
                     if row == grid[0]:
                         cursor_x= long_stretch[0]+ star_length/2-3
-                    instructions.append((M, long_stretch[0],long_stretch[1]))
+                    instructions.append((M, long_stretch[0],long_stretch[1]-star_length/2))
                     on_a_long_stretch = False
                 # do a little circle thing around this point
                 instructions.extend([(M, cursor_x-star_length/2, cursor_y-star_length/2), (L, cursor_x - star_length/2, cursor_y+star_length/2), (L, cursor_x+star_length/2, cursor_y + star_length/2), (L, cursor_x+star_length/2, cursor_y-star_length/2), (L, cursor_x-star_length/2, cursor_y-star_length/2)])
@@ -70,6 +70,6 @@ def export_grid_to_svg(grid):
         instructions.append((M, 10, cursor_y))
         cursor_x = star_length+2
         cursor_y += star_length+2
-    svg.path(instructions)
+    svg.path(instructions, 'blue')
 
     return svg
