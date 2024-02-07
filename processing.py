@@ -14,7 +14,7 @@ void setup() {
   E.stroke(5,10,1); 
   E.strokeWeight(0.5);
   E.hatchSpacing(1); 
-  E.setStitch(5, 15, 0); 
+  E.setStitch(30, 50, 0); 
 
   <CONTENT>
 
@@ -51,7 +51,7 @@ def export_svg_to_processing(svg: SVG, filename="") -> str:
                 if command == L:
                     content += f"E.line({x1*600/max_x}, {y1*600/max_y}, {x2*600/max_x}, {y2*600/max_y});\n"
         elif isinstance(part, SVGCircle):
-            content += f"E.circle({part.x*600/max_x},{part.y*600/max_y},{part.radius*600/max_y});\r\n"
+            content += f"E.setStitch(5, 50, 0);\r\nE.circle({part.x*600/max_x},{part.y*600/max_y},{part.radius*600/max_y}); E.setStitch(30, 50, 0);\r\n"
 
     file = BASE_CONTENT.replace("<CONTENT>", content)
     if filename != "":
