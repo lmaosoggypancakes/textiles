@@ -1,14 +1,8 @@
-import streamlit as st
-import streamlit_shadcn_ui as ui
-from io import StringIO
 from kinparse import parse_netlist
 from helpers import * 
-import random
 from graphs import *
 from springs import *
 from processing import *
-import matplotlib.pyplot as plt
-import copy
 from typing import Union
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
