@@ -1,3 +1,2 @@
-streamlit 
-streamlit_shadcn_ui
+fastapi
 kinparse
