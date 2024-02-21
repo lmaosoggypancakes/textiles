@@ -1,6 +1,6 @@
+from __future__ import annotations
 import math
 from typing import Union
-from __future__ import annotations
 
 SPRING_EQUILIBRIUM = 50 # 50 m spring
 SPRING_CONSTANT = 5  # 5 N/m
