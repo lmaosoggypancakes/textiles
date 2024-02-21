@@ -1,3 +1,5 @@
 uvicorn
 fastapi
 kinparse
+flask
+flask_cors

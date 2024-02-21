@@ -3,14 +3,32 @@ from helpers import *
 from graphs import *
 from springs import *
 from processing import *
-from typing import Union
-from fastapi import FastAPI, HTTPException
+from typing import Dict
+from fastapi import FastAPI, HTTPException, WebSocket
 from pydantic import BaseModel
+from fastapi.middleware.cors import CORSMiddleware
 
 class File(BaseModel):
     data: str
 
+class WebSocketPayload(BaseModel):
+    label: str
+    data: Dict
+
 app = FastAPI()
+
+origins = [
+        "http://localhost:5173",
+        "https://stretchy.soggypancakes.tech"
+        ]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 @app.get("/")
 def index():
@@ -28,38 +46,32 @@ def parse_file(data: File):
         raise HTTPException(status_code=400, detail="File didn't parse successfully. Are you use you uploaded a netlist?")
 
 
-# st.set_page_config(layout="wide")
-# st.sidebar.write("# KiCad :3")
-# file = st.sidebar.file_uploader("Upload your KiCad schematic netlist")
-# if file is not None:
-#     data = file.read().decode("utf-8")
-#     netlist = parse_netlist(data)
-#     # create nodes
-#     radius=100
-#     if len(nodes) == 0: 
-#         for (i,part) in enumerate(netlist.parts):
-#             angle = 2 * math.pi * i/len(netlist.parts)
-#             x = 400+radius+math.cos(angle)
-#             y = 400+radius+math.cos(angle)
-#             nodes.append(PhysicalNode(x, y, part.ref))
-#     with st.container():
-
-#         # refuse larger schematics for now
-#         if len(netlist.parts) > 10 or len(netlist.nets) > 10:
-#             st.write("""## Schematic too big </3""")
-#             exit()
-#         st.write("""## Awesome! Here's your netlist: """)
-#         st.write("""### Parts""")
+@app.websocket("/session")
+async def ws(socket: WebSocket):
+    await socket.accept()
+    nodes: List[PhysicalNode] = []
+    connections: List[PhysicalConnection] = []
+    netlist = None
+    while True:
+        payload: WebSocketPayload = await socket.receive_json()
+        if payload.label == "netlist":
+            if netlist:
+                socket.send_json({"message", "You have already set your netlist in this transaction."})
+            else:
+                netlist = payload.data
+                # create nodes
+                radius=100
+                if len(nodes) == 0: 
+                    for (i,part) in enumerate(netlist.parts):
+                        angle = 2 * math.pi * i/len(netlist.parts)
+                        x = 400+radius+math.cos(angle)
+                        y = 400+radius+math.cos(angle)
+                        nodes.append(PhysicalNode(x, y, part.ref))
         
-#         for part in netlist.parts:
-#             st.write(f"""- ({part.ref}) {part.name}, {part.desc}""")
-#         st.write("""### Connections""")
-#         for connection in netlist.nets:
-#             if len(connection.pins) == 2:
-#                 st.write(f"""- {connection.name}, {connection.pins[0].ref} <    > {connection.pins[1].ref}""")
-#             elif len(connection.pins) == 1:
-#                 st.write(f"""- {connection.name}, {connection.pins[0].ref} (OPEN)""")
-#         st.divider()
+        elif payload.label == "get_graph":
+            socket.send_json({"nodes": [node.serialize() for node in nodes], "connections": [c.serialize() for c in connections]})
+
+        
 #         # messing around with this for a bit
 #         # if n = stretchification on a given connection of length x, we convert the straight line to an equation of y=sin(nt), 0<=t<=x
 #         # given y=sin(nt) which is continous, to convert to point-to's we sample 2n-times (peak-to-peak), so ~~~ becomes /\/\/\/\/\/\/\/\

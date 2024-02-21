@@ -1,4 +1,5 @@
 import math
+from typing import Union
 
 SPRING_EQUILIBRIUM = 50 # 50 m spring
 SPRING_CONSTANT = 5  # 5 N/m
@@ -19,6 +20,9 @@ class Vector:
         self.y = y
         self.angle = math.atan2(y, x)
         self.mag = math.sqrt(x*x + y*y)
+    
+    def serialize(self): 
+        return {"x": self.x, "y": self.y, "angle": self.angle, "mag": self.mag}
     
     def __mul__(self, other):
         if isinstance(other, (int, float)):
@@ -64,7 +68,15 @@ class PhysicalNode:
         )
     def __str__(self) -> str:
         return f"{self.ref}: {self.x, self.y}"
-        
+
+    def serialize(self):
+        return {
+            "ref": self.ref,
+            "acc": self.acc.serialize(),
+            "vel": self.vel.serialize(),
+            "x": self.x,
+            "y": self.y
+        }
 
 class PhysicalConnection:
     def __init__(self, one: PhysicalNode, two: PhysicalNode, ref) -> None:
@@ -116,6 +128,12 @@ class PhysicalConnection:
         y = (self.two.y + self.two.y) / 2
         return x,y
 
+    def serialize(self) -> dict[str, Union[str, dict]]: # type: ignore
+        return {
+            "one": self.one.serialize(),
+            "two": self.two.serialize(),
+            "ref": self.ref
+        }
     def __str__(self): 
         return f"{self.one.ref} <> {self.two.ref}"
 
