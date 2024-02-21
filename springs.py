@@ -1,5 +1,6 @@
 import math
 from typing import Union
+from __future__ import annotations
 
 SPRING_EQUILIBRIUM = 50 # 50 m spring
 SPRING_CONSTANT = 5  # 5 N/m
@@ -128,7 +129,7 @@ class PhysicalConnection:
         y = (self.two.y + self.two.y) / 2
         return x,y
 
-    def serialize(self) -> dict[str, Union[str, dict]]: # type: ignore
+    def serialize(self) -> Dict[str, Union[str, Dict]]: # type: ignore
         return {
             "one": self.one.serialize(),
             "two": self.two.serialize(),
