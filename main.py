@@ -3,9 +3,10 @@ from helpers import *
 from graphs import *
 from springs import *
 from processing import *
-from typing import Dict
+from typing import Dict, List
 from fastapi import FastAPI, HTTPException, WebSocket
 from pydantic import BaseModel
+from pyparsing.exceptions import ParseException
 from fastapi.middleware.cors import CORSMiddleware
 
 class File(BaseModel):
@@ -14,6 +15,48 @@ class File(BaseModel):
 class WebSocketPayload(BaseModel):
     label: str
     data: Dict
+#export interface Netlist {
+#     libraries: {
+#         name: string;
+#         uri: string;
+#     }[],
+#     parts: {
+#         ref: string;
+#         value: string;
+#         name: string;
+#     }[],
+#     nets: {
+#         name: string;
+#         code: number;
+#         pins: {
+#             ref: string;
+#             num: number
+#         }[]
+#     }[]
+# }
+
+class Pin(BaseModel):
+    ref: str
+    num: str
+
+class Net(BaseModel):
+    name: str
+    code: str
+    pins: List[Pin]
+
+class Part(BaseModel):
+    ref: str
+    value: str
+    name: str
+
+class Library(BaseModel):
+    name: str
+    uri: str
+
+class Netlist(BaseModel):
+    # libraries: List[Library]
+    parts: List[Part]
+    nets: List[Net]
 
 app = FastAPI()
 
@@ -35,15 +78,18 @@ def index():
     return {"data": "lmao"}
 
 @app.post("/parse")
-def parse_file(data: File):
+def parse_file(data: File) -> Netlist:
     try:
         netlist = parse_netlist(data.data)
+        nets = list(map(lambda net: {"name": net.name, "code": net.code, "pins": list(map(lambda pin: {"ref": pin.ref, "num": pin.num}, net.pins))}, netlist.nets))
+        parts = list(map(lambda part: {"ref": part.ref, "value": part.value, "name": part.name}, netlist.parts))
         return {
-            "file": netlist
+                "nets": nets,
+                "parts": parts
         }
-    except Exception as e:
+    except ParseException as e:
         print(f"There was an error: {e}")
-        raise HTTPException(status_code=400, detail="File didn't parse successfully. Are you use you uploaded a netlist?")
+        raise HTTPException(status_code=400, detail="File didn't parse successfully. Are you sure you uploaded a netlist?")
 
 
 @app.websocket("/session")

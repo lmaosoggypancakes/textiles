@@ -311,7 +311,7 @@
     "meta": {
       "version": 1
     },
-    "net_format_name": "",
+    "net_format_name": "KiCad",
     "page_layout_descr_file": "",
     "plot_directory": "",
     "spice_current_sheet_as_root": false,
@@ -322,6 +322,11 @@
     "subpart_first_id": 65,
     "subpart_id_separator": 0
   },
-  "sheets": [],
+  "sheets": [
+    [
+      "086e2f83-3494-4c64-af3b-1550004bbbb9",
+      ""
+    ]
+  ],
   "text_variables": {}
 }
