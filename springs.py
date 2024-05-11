@@ -1,12 +1,14 @@
 from __future__ import annotations
 import math
-from typing import Union
+from typing import Union, List
 
-SPRING_EQUILIBRIUM = 50 # 50 m spring
+SPRING_EQUILIBRIUM = 25 # 50 m spring
 SPRING_CONSTANT = 5  # 5 N/m
 
 NODE_MASS = 0.5 # 0.5 kg per node
-DT = 0.1 # 10 ticks per simulation second
+DT = 0.01 # 100 ticks per simulation second
+
+RADIUS = 20 # "propulsion zone"
 class Vector:
     """
     Represents a vector starting at (0,0) with a given x,y value.
@@ -38,22 +40,65 @@ class Vector:
     
 
 class PhysicalNode:
-    def __init__(self, x,y, ref):
+    def __init__(self, x,y, ref, angle=0):
         # stationary (accel and velocity both 0) object at (x,y) 
         self.ref = ref
         self.acc = Vector(0,0)
         self.vel = Vector(0,0)
         self.x = x
         self.y = y
+        self.angle = angle
     
-    def next_state(self, forces):
+    @staticmethod
+    def from_dict(node):
+        return PhysicalNode(int(node["x"]),int(node["y"]), node["ref"])
+    
+    def next_state_peek(self, forces, constraint=None):
         f = resultant_force(forces)
         self.acc = f/NODE_MASS
         dv = self.acc * DT # change in velocity
         self.vel.update(self.vel.x + dv.x, self.vel.y + dv.y)
         ds = self.vel * DT # change in position
-        self.x += ds.x
-        self.y += ds.y
+        return (self.x+ds.x, self.y+ds.y)
+
+    
+
+    def next_state(self, forces, constraint=None):
+        f = resultant_force(forces)
+        self.acc = f/NODE_MASS
+        dv = self.acc * DT # change in velocity
+        self.vel.update(self.vel.x + dv.x, self.vel.y + dv.y)
+        ds = self.vel * DT # change in position
+        if not constraint:
+            self.x += ds.x
+            self.y += ds.y
+            return (self.x, self.y)
+        w = ds.x
+        h = ds.y
+
+        new_x = self.x + w
+        new_y = self.y + h
+
+        shape = constraint["shape"]
+        
+        if len(shape) == 0 or point_inside_polygon(new_x,new_y, shape):
+            self.x = new_x
+            self.y = new_y
+            return 
+        
+        closest_point = None
+        min_distance = float('inf')
+        for i in range(len(shape)):
+            p1 = shape[i]
+            p2 = shape[(i + 1) % len(shape)]
+            # Calculate distance from new position to line segment (p1, p2)
+            distance = distance_to_line_segment(new_x, new_y, p1[0], p1[1], p2[0], p2[1])
+            if distance < min_distance:
+                min_distance = distance
+                closest_point = closest_point_on_line_segment(new_x, new_y, p1[0], p1[1], p2[0], p2[1])    
+        self.x = closest_point[0]
+        self.y = closest_point[1]
+
         return (self.x, self.y)
 
     def get_connections(self):
@@ -80,10 +125,27 @@ class PhysicalNode:
         }
 
 class PhysicalConnection:
-    def __init__(self, one: PhysicalNode, two: PhysicalNode, ref) -> None:
+    all_connections: List[PhysicalConnection] = []
+    def __init__(self, one: PhysicalNode, two: PhysicalNode, ref, spring=SPRING_EQUILIBRIUM) -> None:
+        self.spring = spring
         self.one = one
+        self.angle_one = 0
+        self.angle_two = 0
         self.two = two
         self.ref = ref
+        ione = 0  
+        itwo = 0
+        for c in self.all_connections:
+            if c.one == self.one or c.one == self.two:
+                ione += 1
+            if c.two == self.two or c.two == self.one:
+                itwo += 1
+        
+        self.angle_one += ione*math.pi/6
+        self.angle_two += itwo*math.pi/6
+        self.all_connections.append(self)
+            
+
     
     def get_length(self):
         dx = self.one.x - self.two.x
@@ -105,7 +167,7 @@ class PhysicalConnection:
         if spring_force() < 0, the spring is being stretched.
         """
         length = self.get_length()
-        return -(length - SPRING_EQUILIBRIUM) * SPRING_CONSTANT
+        return -(length - self.spring) * SPRING_CONSTANT
 
     def spring_force_vector(self, node):
         """
@@ -132,14 +194,19 @@ class PhysicalConnection:
     def serialize(self) -> Dict[str, Union[str, Dict]]: # type: ignore
         return {
             "one": self.one.serialize(),
+            "one_angle": self.angle_one,
+            "two_angle": self.angle_two,
             "two": self.two.serialize(),
             "ref": self.ref
         }
     def __str__(self): 
         return f"{self.one.ref} <> {self.two.ref}"
 
+    def __repr__(self) -> str:
+        return str(self)
+    
     def __eq__(self, other) -> bool:
-        return self.ref == other.ref
+        return (self.one == other.one and self.two == other.two) or (self.one == other.two and self.two == other.one)
     
     @staticmethod
     def get_connections(node, connections):
@@ -161,3 +228,86 @@ def resultant_force(vectors):
         y += vector.y
     return Vector(x,y)
 
+
+
+def point_inside_polygon(x, y, poly):
+    n = len(poly)
+    inside = False
+    p1x, p1y = poly[0]
+    for i in range(n+1):
+        p2x, p2y = poly[i % n]
+        if y > min(p1y, p2y):
+            if y <= max(p1y, p2y):
+                if x <= max(p1x, p2x):
+                    if p1y != p2y:
+                        xinters = (y-p1y)*(p2x-p1x)/(p2y-p1y)+p1x
+                    if p1x == p2x or x <= xinters:
+                        inside = not inside
+        p1x, p1y = p2x, p2y
+    return inside
+
+def distance_to_line_segment(x, y, x1, y1, x2, y2):
+    A = x - x1
+    B = y - y1
+    C = x2 - x1
+    D = y2 - y1
+
+    dot = A * C + B * D
+    len_sq = C * C + D * D
+    param = -1
+    if len_sq != 0:  
+        param = dot / len_sq
+
+    if param < 0:
+        xx = x1
+        yy = y1
+    elif param > 1:
+        xx = x2
+        yy = y2
+    else:
+        xx = x1 + param * C
+        yy = y1 + param * D
+
+    dx = x - xx
+    dy = y - yy
+    return (dx * dx + dy * dy) ** 0.5
+
+def closest_point_on_line_segment(x, y, x1, y1, x2, y2):
+    A = x - x1
+    B = y - y1
+    C = x2 - x1
+    D = y2 - y1
+
+    dot = A * C + B * D
+    len_sq = C * C + D * D
+    param = -1
+    if len_sq != 0:  
+        param = dot / len_sq
+
+    if param < 0:
+        xx = x1
+        yy = y1
+    elif param > 1:
+        xx = x2
+        yy = y2
+    else:
+        xx = x1 + param * C
+        yy = y1 + param * D
+
+    return xx, yy
+
+def point_inside_polygon(x, y, poly):
+    n = len(poly)
+    inside = False
+    p1x, p1y = poly[0]
+    for i in range(n+1):
+        p2x, p2y = poly[i % n]
+        if y > min(p1y, p2y):
+            if y <= max(p1y, p2y):
+                if x <= max(p1x, p2x):
+                    if p1y != p2y:
+                        xinters = (y-p1y)*(p2x-p1x)/(p2y-p1y)+p1x
+                    if p1x == p2x or x <= xinters:
+                        inside = not inside
+        p1x, p1y = p2x, p2y
+    return inside

@@ -1,3 +1,4 @@
+# rule 110 implementation based on the SVG rendering lib i have
 import shutil
 from svg import *
 

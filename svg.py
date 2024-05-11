@@ -1,11 +1,11 @@
 from typing import List, Union
+import math
 M = "M"
 L = "L"
-BASE_STYLING = "<style>text {font: 5px sans-serif; fill: white;}</style>"
+BASE_STYLING = "<style>text {font: 24px sans-serif; fill: black;}</style>"
 CLOSING = "</svg>"
 
 def sign(x):
-    print(x)
     if x > 0:
         return 1
     if x < 0:
@@ -27,7 +27,6 @@ class SVG:
             self.draw += f"{inst[0]} {inst[1]} {inst[2]} "
         self.draw += f"' stroke='{stroke}' fill='transparent' />"
         self.parts.append(SVGPath(instructions, stroke))
-        print(self.parts)
     def circle(self, x,y,radius,fill):
         self.parts.append(SVGCircle(x,y,radius))
         self.draw+= f"<circle cx='{x}' cy='{y}' r='{radius}' fill='{fill}' stroke='red' />"
@@ -55,7 +54,7 @@ class SVG:
         dy = y2 - y1
         step_x = dx/n
         step_y = dy/n
-        
+        angle = math.atan2(dy, dx)
         points = []
         for i in range(n):
             if i % 3 == 0:
@@ -64,15 +63,14 @@ class SVG:
                 y = (y1) + (i * step_y)
             elif i % 3 == 1:
                 # zag
-                x = (x1) + (i * step_x) - zig_size*(step_y/2) * sign(dy)
-                y = (y1) + (i * step_y) + zig_size*(step_x/2)*sign(dx)
+                x = (x1) + (i * step_x) - zig_size*math.sin(angle) * sign(dy)
+                y = (y1) + (i * step_y) + zig_size*math.cos(angle)*sign(dx)
             else:
                 # zig
-                x = (x1) + (i * step_x) + zig_size*(step_y/2) * sign(dy)
-                y = (y1) + (i * step_y) - zig_size*(step_x/2)*sign(dx)
+                x = (x1) + (i * step_x) + zig_size**math.sin(angle) * sign(dy)
+                y = (y1) + (i * step_y) - zig_size*math.cos(angle)*sign(dx)
             points.append((x,y))
-        if n % 3 != 0:
-            points.append((x2,y2))
+        points.append((x2,y2))
         if not svg:
             m = max([x1,x2,y1,y2])
             svg = SVG(m+200,m+200)

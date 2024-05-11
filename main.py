@@ -1,8 +1,9 @@
 from kinparse import parse_netlist
+import math
 from helpers import * 
 from graphs import *
 from springs import *
-from processing import *
+from embroidery import *
 from typing import Dict, List
 from fastapi import FastAPI, HTTPException, WebSocket
 from pydantic import BaseModel
@@ -15,25 +16,6 @@ class File(BaseModel):
 class WebSocketPayload(BaseModel):
     label: str
     data: Dict
-#export interface Netlist {
-#     libraries: {
-#         name: string;
-#         uri: string;
-#     }[],
-#     parts: {
-#         ref: string;
-#         value: string;
-#         name: string;
-#     }[],
-#     nets: {
-#         name: string;
-#         code: number;
-#         pins: {
-#             ref: string;
-#             num: number
-#         }[]
-#     }[]
-# }
 
 class Pin(BaseModel):
     ref: str
@@ -58,6 +40,9 @@ class Netlist(BaseModel):
     parts: List[Part]
     nets: List[Net]
 
+# class Constraint(BaseModel):
+    # node: PhysicalNode
+    # shape: List
 app = FastAPI()
 
 origins = [
@@ -95,29 +80,134 @@ def parse_file(data: File) -> Netlist:
 @app.websocket("/session")
 async def ws(socket: WebSocket):
     await socket.accept()
+    await socket.send_json({"label": "message", "message": "welcome!"})
     nodes: List[PhysicalNode] = []
     connections: List[PhysicalConnection] = []
     netlist = None
     while True:
         payload: WebSocketPayload = await socket.receive_json()
-        if payload.label == "netlist":
+        if payload["label"] == "netlist":
             if netlist:
-                socket.send_json({"message", "You have already set your netlist in this transaction."})
+                socket.send_json({"label": "message", "message": "You have already set your netlist in this transaction."})
             else:
-                netlist = payload.data
+                netlist = payload["data"]
                 # create nodes
-                radius=100
+                radius=150
                 if len(nodes) == 0: 
-                    for (i,part) in enumerate(netlist.parts):
-                        angle = 2 * math.pi * i/len(netlist.parts)
-                        x = 400+radius+math.cos(angle)
-                        y = 400+radius+math.cos(angle)
-                        nodes.append(PhysicalNode(x, y, part.ref))
-        
-        elif payload.label == "get_graph":
-            socket.send_json({"nodes": [node.serialize() for node in nodes], "connections": [c.serialize() for c in connections]})
+                    for (i,part) in enumerate(netlist["parts"]):
+                        angle = 2 * math.pi * i/len(netlist["parts"])
+                        x = 100+radius*(1 + math.cos(angle))
+                        y = 100+radius*(1 + math.sin(angle))
+                        nodes.append(PhysicalNode(x, y, part["ref"]))
 
-        
+                    for conn in netlist["nets"]:
+                        if len(conn["pins"]) == 2:
+                            p1 = list(filter(lambda x: x.ref == conn["pins"][0]["ref"],nodes))[0]
+                            p2 = list(filter(lambda x: x.ref == conn["pins"][1]["ref"],nodes))[0]
+                            c = PhysicalConnection(p1,p2,conn["code"])
+                            connections.append(c)
+
+                await socket.send_json({"label": "graph", "nodes": [node.serialize() for node in nodes], "connections": [c.serialize() for c in connections]})
+
+        elif payload["label"] == "get_graph":
+            await socket.send_json({"label": "graph", "nodes": [node.serialize() for node in nodes], "connections": [c.serialize() for c in connections]})
+
+        elif payload["label"] == "with_stretchification":
+            points = []
+            stretchification = int(payload["stretchification"])
+            depth = int(payload["depth"])
+            # handle duplicates
+            for c in connections:
+                x1 = c.one.x + 24*math.cos(c.angle_one)
+                y1 = c.one.y + 24*math.sin(c.angle_one)
+
+
+                x2 = c.two.x + 24*math.cos(c.angle_two)
+                y2 = c.two.y + 24*math.sin(c.angle_two)
+
+                points.append(create_r_zigzag((x1,y1), (x2,y2), stretchification, depth))
+            await socket.send_json({"label": "paths", "nodes": [node.serialize() for node in nodes], "points": points})
+        elif payload["label"] == "after_time":
+            time = payload["time"]
+            dict_nodes = payload["nodes"]
+            new_nodes = list(map(lambda d: PhysicalNode.from_dict(d), dict_nodes))
+            new_connections: List[PhysicalConnection] = []
+            for conn in netlist["nets"]:
+                    if len(conn["pins"]) == 2:
+                        p1 = list(filter(lambda x: x.ref == conn["pins"][0]["ref"],new_nodes))[0]
+                        p2 = list(filter(lambda x: x.ref == conn["pins"][1]["ref"],new_nodes))[0]
+                        c = PhysicalConnection(p1,p2,conn["code"])
+                        new_connections.append(c)
+            
+            stretchification = int(payload["stretchification"])
+            depth = int(payload["depth"])
+            constraints = payload["constraints"]
+            max_len = max(map(lambda c: c.get_length() ,new_connections))
+            for (i, c) in enumerate(constraints):
+                constraints[i]["node"] = PhysicalNode.from_dict(constraints[i]["node"])
+
+            if not all([new_nodes, stretchification, depth]):
+                await socket.send_json({"label": "message", "message": "one of the required fields is missing"})
+                continue
+            for _ in range(time):
+                for node in new_nodes:
+                    connected = PhysicalConnection.get_connections(node, new_connections)
+                    forces = list(map(lambda x: x.spring_force_vector(node), connected))
+                    constraint = None
+                    for c in constraints:
+                        if c["node"] == node:
+                            constraint = c
+                    
+                    node.next_state(forces, constraint)
+            # after the sim, create the zigzags
+            new_points = []
+            grouped = find_duplicate_connections(new_connections)
+            for group in grouped:
+                arc_offset = (math.pi) / (4*len(grouped))
+                for i, conn in enumerate(group):
+                    dx = conn.one.x - conn.two.x
+                    dy = conn.one.y - conn.two.y
+                    angle = math.atan2(dy, dx)
+
+                    x1 = conn.one.x - 24*math.cos(angle+arc_offset*i*sign(dx))
+                    y1 = conn.one.y - 24*math.sin(angle+arc_offset*i*sign(dx))
+
+                    x2 = conn.two.x + 24*math.cos(angle-arc_offset*i*sign(dx))                    
+                    y2 = conn.two.y + 24*math.sin(angle-arc_offset*i*sign(dx))                    
+                    
+                    path = create_r_zigzag((x1, y1), (x2, y2), stretchification, depth)
+                    new_points.append(path)
+            await socket.send_json({"label": "paths", "nodes": [node.serialize() for node in new_nodes], "points": new_points})
+        elif payload["label"] == "give_svg_pwease":
+            dict_nodes = payload["nodes"]
+            new_nodes = list(map(lambda d: PhysicalNode.from_dict(d), dict_nodes))
+            points = payload["points"]
+            new_connections = []
+            for conn in netlist["nets"]:
+                    if len(conn["pins"]) == 2:
+                        p1 = list(filter(lambda x: x.ref == conn["pins"][0]["ref"],new_nodes))[0]
+                        p2 = list(filter(lambda x: x.ref == conn["pins"][1]["ref"],new_nodes))[0]
+                        c = PhysicalConnection(p1,p2,conn["code"])
+                        new_connections.append(c)
+            
+            await socket.send_json({"label": "svg", "file": str(render_graph(new_nodes, points))})
+
+        elif payload["label"] == "give_processing_pwease":
+            dict_nodes = payload["nodes"]
+            points = payload["points"]
+            new_nodes = list(map(lambda d: PhysicalNode.from_dict(d), dict_nodes))
+            new_connections = []
+            for conn in netlist["nets"]:
+                    if len(conn["pins"]) == 2:
+                        p1 = list(filter(lambda x: x.ref == conn["pins"][0]["ref"],new_nodes))[0]
+                        p2 = list(filter(lambda x: x.ref == conn["pins"][1]["ref"],new_nodes))[0]
+                        c = PhysicalConnection(p1,p2,conn["code"])
+                        new_connections.append(c)
+            
+            await socket.send_json({
+                "label": "processing",
+                "file": export_svg_to_processing(render_graph(new_nodes, points))
+            }) 
 #         # messing around with this for a bit
 #         # if n = stretchification on a given connection of length x, we convert the straight line to an equation of y=sin(nt), 0<=t<=x
 #         # given y=sin(nt) which is continous, to convert to point-to's we sample 2n-times (peak-to-peak), so ~~~ becomes /\/\/\/\/\/\/\/\
@@ -125,8 +215,6 @@ async def ws(socket: WebSocket):
 #         # we can try sampling more for a more continous line, however
 #         # TODO: given this, draw and display the SVG file
         
-#         optimize, simulate  = st.tabs(["Optimize", "Simulate"])
-#         with optimize:
 #             if st.button("Shuffle"):
 #                 random.shuffle(nodes)
 #             with st.spinner("Calculating"):
@@ -136,13 +224,7 @@ async def ws(socket: WebSocket):
 #                 for t in range(100):
 #                     new_nodes = copy.deepcopy(nodes)
 #                     new_connections = []
-#                     for conn in netlist.nets:
-#                         if len(conn.pins) == 2:
-#                             p1 = list(filter(lambda x: x.ref == conn.pins[0].ref,new_nodes))[0]
-#                             p2 = list(filter(lambda x: x.ref == conn.pins[1].ref,new_nodes))[0]
-#                             c = PhysicalConnection(p1,p2,conn.code)
-#                             new_connections.append(c)
-
+# 
 #                     for _ in range(t):
 #                         for node in new_nodes:  
 #                             connected = PhysicalConnection.get_connections(node, new_connections)
