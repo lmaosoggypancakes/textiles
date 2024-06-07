@@ -40,6 +40,11 @@ def create_n_zigzag(one, two, n, zig_size=1):
     return points
 
 def create_r_zigzag(one, two, r, n,svg=None):
+    """
+    creates a zigzag from one to two, given ratio r and n.
+    returns [I, x, y][] where I \in {M, L}
+    """
+    print(r, n)
     if not svg:
         svg = SVG(500, 500)
     (x1, y1) = one
@@ -48,7 +53,10 @@ def create_r_zigzag(one, two, r, n,svg=None):
     dy = (y2-y1)/n
     dl = math.sqrt(dx**2 + dy**2)
 
-    triangle_angle = math.acos(1/r)
+    if r == 0: 
+        triangle_angle = 0
+    else: 
+        triangle_angle = math.acos(1/r)
     offset_angle = math.atan2(dy,dx)
     svg.circle(x1,y1,5,"white")
     svg.circle(x2,y2,5,"white")

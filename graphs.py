@@ -92,8 +92,10 @@ def render(one,two,path,obstacles, filename="output.svg"):
     for o in obstacles:
         if o.fixed:
             svg.circle(o.x, o.y, PROPULSION_FIELD_RADIUS, "red")
+            svg.circle(o.x,o.y, PROPULSION_FIELD_RADIUS - 10, "purple")
         else: 
             svg.circle(o.x, o.y, PROPULSION_FIELD_RADIUS, "green")
+            svg.circle(o.x,o.y, PROPULSION_FIELD_RADIUS - 10, "purple")
     
     if isinstance(path[0], Node):
         inst = [(M, path[0].node[0], path[0].node[1])]
@@ -131,11 +133,14 @@ def discretize(path):
     return new_path
 
 def zigzagify(path, r, n):
+    print(path)
     new_path = []
     for i in range(1,len(path)):
-        one = path[i-1].node
-        two = path[i].node
-        new_path.extend(create_r_zigzag(one, two, r, n))
+        one = path[i-1]
+        two = path[i]
+        zig = create_r_zigzag(one, two, r, n)
+        for z in zig:
+            new_path.append([z[1], z[2]])
     return new_path
     
 def point_in_circle(x, y, h, k, r):
@@ -229,10 +234,11 @@ if __name__ == "__main__":
     discretized = discretize(path)
     (optimized_decent, decent_obstacles) = optimize(discretized, ob, 50)
     (optimized_bad, bad_obstacles) = optimize(discretized, ob, 2000)
-    # zigzagified = zigzagify(discretized, 1.3, 2)
+    zigzagified = zigzagify(optimized_decent, 1.3, 2)
     # if not is_safe_path(zigzagified):
         # print("WARNING: path is NOT safe to embroider: some jumps are too small")
     render(one, two, path, ob, "paths/search/base.svg")
     render(one, two, discretized, ob, "paths/search/discrete.svg")
     render(one, two, optimized_decent, decent_obstacles, "paths/search/optimized_decent.svg")
     render(one, two, optimized_bad, bad_obstacles,"paths/search/optimized_bad.svg")
+    render(one, two, zigzagified, decent_obstacles, "paths/search/zigzagified.svg")

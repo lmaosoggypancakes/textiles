@@ -138,15 +138,14 @@ async def ws(socket: WebSocket):
                         p2 = list(filter(lambda x: x.ref == conn["pins"][1]["ref"],new_nodes))[0]
                         c = PhysicalConnection(p1,p2,conn["code"])
                         new_connections.append(c)
-            
-            stretchification = int(payload["stretchification"])
-            depth = int(payload["depth"])
+            stretchification = float(payload["stretchification"])
+            depth = float(payload["depth"])
             constraints = payload["constraints"]
             max_len = max(map(lambda c: c.get_length() ,new_connections))
             for (i, c) in enumerate(constraints):
                 constraints[i]["node"] = PhysicalNode.from_dict(constraints[i]["node"])
-
-            if not all([new_nodes, stretchification, depth]):
+            print(stretchification, depth)
+            if not all([new_nodes, depth]):
                 await socket.send_json({"label": "message", "message": "one of the required fields is missing"})
                 continue
             for _ in range(time):
