@@ -3,3 +3,4 @@ fastapi
 kinparse
 flask
 flask_cors
+pyembroidery
