@@ -133,7 +133,6 @@ def discretize(path):
     return new_path
 
 def zigzagify(path, r, n):
-    print(path)
     new_path = []
     for i in range(1,len(path)):
         one = path[i-1]
@@ -218,27 +217,37 @@ def optimize(path: List[Node], obstacles,time=TIME):
     new_path = []
     for node in best_nodes:
         new_path.append((node.x, node.y))
-    print(best_energy)
     return (new_path, new_obstacles)
 def path_energy(connections: List[PhysicalConnection]):
     e = 0
     for c in connections:
         e += c.spring_energy()
     return e
-if __name__ == "__main__":
-    # test out some cases
-    one = (10, 10)
-    two = (200, 200)
-    ob = [Obstacle(70, 200), Obstacle(80,60), Obstacle(125, 120)]
-    path = gbfs(one, two, ob)
-    discretized = discretize(path)
+
+def best_path(one, two, ob, r, n):
+    base = gbfs(one, two, ob)
+    discretized = discretize(base)
     (optimized_decent, decent_obstacles) = optimize(discretized, ob, 50)
-    (optimized_bad, bad_obstacles) = optimize(discretized, ob, 2000)
-    zigzagified = zigzagify(optimized_decent, 1.3, 2)
-    # if not is_safe_path(zigzagified):
-        # print("WARNING: path is NOT safe to embroider: some jumps are too small")
-    render(one, two, path, ob, "paths/search/base.svg")
-    render(one, two, discretized, ob, "paths/search/discrete.svg")
-    render(one, two, optimized_decent, decent_obstacles, "paths/search/optimized_decent.svg")
-    render(one, two, optimized_bad, bad_obstacles,"paths/search/optimized_bad.svg")
-    render(one, two, zigzagified, decent_obstacles, "paths/search/zigzagified.svg")
+    return zigzagify(optimized_decent, r, n)
+
+# if __name__ == "__main__":
+#     # test out some cases
+#     one = (10, 10)
+#     two = (200, 200)
+#     ob = [Obstacle(70, 200), Obstacle(80,60), Obstacle(125, 120)]
+#     base = gbfs(one, two, ob)
+#     print(f"{base=}")
+#     discretized = discretize(base)
+#     print(f"{discretized=}")
+#     (optimized_decent, decent_obstacles) = optimize(discretized, ob, 50)
+#     (optimized_bad, bad_obstacles) = optimize(discretized, ob, 2000)
+#     print(f"{optimized_decent=}")
+#     zigzagified = zigzagify(optimized_decent, 1.3, 2)
+#     print(f"{zigzagified=}")
+#     # if not is_safe_path(zigzagified):
+#         # print("WARNING: path is NOT safe to embroider: some jumps are too small")
+#     render(one, two, base, ob, "paths/search/base.svg")
+#     render(one, two, discretized, ob, "paths/search/discrete.svg")
+#     render(one, two, optimized_decent, decent_obstacles, "paths/search/optimized_decent.svg")
+#     render(one, two, optimized_bad, bad_obstacles,"paths/search/optimized_bad.svg")
+#     render(one, two, zigzagified, decent_obstacles, "paths/search/zigzagified.svg")

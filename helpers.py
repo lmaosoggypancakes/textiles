@@ -44,7 +44,7 @@ def create_r_zigzag(one, two, r, n,svg=None):
     creates a zigzag from one to two, given ratio r and n.
     returns [I, x, y][] where I \in {M, L}
     """
-    print(r, n)
+    n = int(n)
     if not svg:
         svg = SVG(500, 500)
     (x1, y1) = one
