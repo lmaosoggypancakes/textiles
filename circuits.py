@@ -130,4 +130,17 @@ def render_circuit(circuit: Circuit) -> SVG :
         for (x_p, y_p) in m.footprint.pins:
             svg.circle(x-m.footprint.range_x+x_p, y-m.footprint.range_y+y_p, 5, "white");
     
+    for (i, row) in enumerate(circuit.graph):
+        for (j, c) in enumerate(row):
+            if c is not None:
+                # connection between [i,j] exists
+                # TODO: handle pins
+                angle1 = 2 * math.pi * i / len(circuit.modules)
+                xa = 400+circle_radius*math.cos(angle1)
+                ya = 400+circle_radius*math.sin(angle1)
+
+                angle2 = 2 * math.pi * j / len(circuit.modules)
+                xb = 400+circle_radius*math.cos(angle2)
+                yb = 400+circle_radius*math.sin(angle2)
+                svg.path([(M, xa, ya), (L, xb, yb)], stroke="purple")
     return svg
