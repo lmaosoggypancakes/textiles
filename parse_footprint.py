@@ -138,8 +138,8 @@ def extract_footprint(src):
                                       "end": {"x": line.end.x[0], "y": line.end.y[0]}, 
                                       "stroke": {"width": line.stroke.width[0], "type": line.stroke.type}, 
                                       "layer": line.layer, "uuid": line.uuid}, footprint.lines))
-  paths = list(map(lambda path: {"start": path.start, "end": path.end}, lines_data))
-  print(lines_data)
+  paths = list(map(lambda path: {"start": path["start"], "end": path["end"]}, lines_data))
+  print(paths)
   print(pins)
 
 extract_footprint("PinHeader_1x02_P2.54mm_Vertical.kicad_mod")
