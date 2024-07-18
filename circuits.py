@@ -1,21 +1,22 @@
 from typing import *
-
+from svg import *
 class Footprint:
-    def __init__(self, path: List[List[int|float]], x_range: int|float, y_range: int|float, pins: List[List[int|float]]):
+    def __init__(self, paths: List[List[List[int|float]]], x_range: int|float, y_range: int|float, pins: List[List[int|float]]):
         """
         Represents the visual footprint of a given schematic (resistor, chip, whatever)
         """
         if len(path) == 0:
             raise Exception("empty footprint")
-        for (x,y) in path:
-            if x < 0 or x > x_range or y < 0 or y > y_range:
-                raise Exception("path point out of bounds: " + (x,y))
+        for path in paths:
+            for (x,y) in path:
+                if x < 0 or x > x_range or y < 0 or y > y_range:
+                    raise Exception("path point out of bounds: " + (x,y))
 
         for (x,y) in pins:
             if x < 0 or x > x_range or y < 0 or y > y_range:
                 raise Exception("pin out of bounds: " + (x,y))
 
-        self.path = path
+        self.paths = paths
         self.x_range = x_range
         self.y_range = y_range
         self.pins = pins
@@ -103,3 +104,30 @@ class Circuit:
                 ret.append([*self.graph[idx][j], j])
         return ret
 
+
+def render_circuit(circuit: Circuit) -> SVG :
+    svg = SVG(800, 800)
+    circle_radius = 300
+    for (i, m) in enumerate(circuit.modules):
+        # place them along a circle
+        # first, place a circle representing the center of each module:
+        angle = 2 * math.pi * i / len(circuit.modules)
+        x = 400+circle_radius*math.cos(angle)
+        y = 400+circle_radius*math.sin(angle)
+        svg.circle(x, y, 10, "red")
+        for p in m.footprint.paths:
+            # render each path with a center of (x,y)
+            # so, the path should take up the space defined by
+            # (x-x_range/2, x+_range/2) and (y-y_range/2, y+y_range/2)
+            inst = []
+            for (i, (x_p, y_p)) in enumerate(p):
+                if i == 0: # M and L are just SVG things for move to/line-to (can move everything to one path as well)
+                    inst.append((M, x-m.footprint.x_range+x_p, y-m.footprint.y_range+y_p))
+                else:
+                    inst.append((L, x-m.footprint.x_range+x_p, y-m.footprint.y_range+y_p))
+            svg.path(inst, "green")
+        
+        for (x_p, y_p) in m.footprint.pins:
+            svg.circle(x-m.footprint.range_x+x_p, y-m.footprint.range_y+y_p, 5, "white");
+    
+    return svg
