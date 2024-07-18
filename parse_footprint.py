@@ -24,7 +24,7 @@ def _parse_footprint(text):
 
   plusorminus = Literal('+') | Literal('-')
   decimal = Word(nums)
-  number = ZeroOrMore(White()).suppress() + Combine(Optional(plusorminus) + decimal + Optional(Literal('.') + decimal)) + ZeroOrMore(White())
+  number = ZeroOrMore(White()).suppress() + Combine(Optional(plusorminus) + decimal + Optional(Literal('.') + decimal)) + ZeroOrMore(White()).suppress()
 
   keyword = ZeroOrMore(White()).suppress() + Word(alphas + '-' + '_') + ZeroOrMore(White()).suppress()
 
@@ -38,9 +38,9 @@ def _parse_footprint(text):
   tags = _paren_clause('tags', OneOrMore(qstring('tag'))('tags'))
 
   # Property
-  at = _paren_clause('at', Group(number('x') + number('y') + Optional(number('z'))))
+  at = Group(_paren_clause('at', number('x') + number('y') + number('z')))('at')
   uuid = _paren_clause('uuid', anystring('uuid'))
-  size = _paren_clause('size', Group(number('width') + number('height')))
+  size = Group(_paren_clause('size', number('width') + number('height')))('size')
   thickness = _paren_clause('thickness', number('thickness'))
   unlocked = _paren_clause('unlocked', word('bool'))
   hide = _paren_clause('hide', word('bool'))
@@ -53,23 +53,24 @@ def _parse_footprint(text):
   attr = _paren_clause('attr', word('attr'))
 
   # Shape Descriptor
-  start = _paren_clause('start', Group(number('x') + number('y')))
-  end = _paren_clause('end', Group(number('x') + number('y')))
+  at_2d = Group(_paren_clause('at', number('x') + number('y')))('at')
+  start = Group(_paren_clause('start', number('x') + number('y')))('start')
+  end = Group(_paren_clause('end', number('x') + number('y')))('end')
   width = _paren_clause('width', number('width'))
   type = _paren_clause('type', inum('type'))
-  stroke = _paren_clause('stroke', width & type)
-  drill = _paren_clause('drill', number('size'))
+  stroke = Group(_paren_clause('stroke', width & type))('stroke')
+  drill = _paren_clause('drill', number('drill'))
   remove_unused_layers = _paren_clause('remove_unused_layers', keyword('bool'))
-  xyz = _paren_clause('xyz', Group(number('x') + number('y') + Optional(number('z'))))
+  xyz = Group(_paren_clause('xyz', number('x') + number('y') + number('z')))
 
   # Shapes
-  fp_line = _paren_clause('fp_line', start & end & stroke & layer & uuid)
-  fp_text = _paren_clause('fp_text', Group(keyword('author') + qstring('text') + (at & layer & uuid & effects)))
-  shape = fp_line | fp_text
-  shapes = ZeroOrMore(shape)('shapes')
+  fp_line = Group(_paren_clause('fp_line', start & end & stroke & layer & uuid))
+  fp_text = Group(_paren_clause('fp_text', keyword('author') + qstring('text') + (at & layer & uuid & effects)))
+  lines = ZeroOrMore(fp_line)('lines')
+  texts = ZeroOrMore(fp_text)('texts')
 
   # Pad
-  pad = _paren_clause('pad', Group(qstring('number') + keyword('type') + keyword('shape') + (at & size & drill & layers & remove_unused_layers & uuid)))
+  pad = Group(_paren_clause('pad', qstring('number') + keyword('type') + keyword('shape') + (at_2d & size & drill & layers & remove_unused_layers & uuid)))
   pads = ZeroOrMore(pad)('pads')
 
   # Model
@@ -87,42 +88,58 @@ def _parse_footprint(text):
     Optional(tags) &
     properties &
     Optional(attr) &
-    shapes & 
+    lines & 
+    texts &
     pads &
     Optional(model))) + end_of_file.suppress()
   return parser.parse_string(text)
 
 def parse_footprint(src, tool='kicad'):
-    """
-    Return a pyparsing object storing the contents of a netlist.
+  """
+  Return a pyparsing object storing the contents of a netlist.
 
-    Args:
-        src: Either a text string, or a filename, or a file object that stores
-            the netlist.
+  Args:
+      src: Either a text string, or a filename, or a file object that stores
+          the netlist.
 
-    Returns:
-        A pyparsing object that stores the netlist contents.
+  Returns:
+      A pyparsing object that stores the netlist contents.
 
-    Exception:
-        PyparsingException.
-    """
+  Exception:
+      PyparsingException.
+  """
 
+  try:
+    text = src.read()
+  except Exception:
     try:
-        text = src.read()
+      text = open(src,'r',encoding='latin_1').read()
     except Exception:
-        try:
-            text = open(src,'r',encoding='latin_1').read()
-        except Exception:
-            text = src
+       text = src
 
-    if not isinstance(text, str):
-        raise Exception("What is this shit you're handing me? [{}]\n".format(src))
+  if not isinstance(text, str):
+    raise Exception("What is this shit you're handing me? [{}]\n".format(src))
 
-    try:
-        return _parse_footprint(text)
-    except KeyError:
-        # OK, that didn't work so well...
-        logging.error('Unsupported ECAD tool library: {}'.format(tool))
-        raise Exception
+  try:
+    return _parse_footprint(text)
+  except KeyError:
+    # OK, that didn't work so well...
+    logging.error('Unsupported ECAD tool library: {}'.format(tool))
+    raise Exception
+    
+def extract_footprint(src):
+  footprint = parse_footprint(src)
+  pads_data = list(map(lambda pad: {"number": pad.number, "type": pad.type[0], "shape": pad.shape[0], 
+                               "at": {"x": pad.at.x[0], "y": pad.at.y[0]}, "size": {"width": pad.size.width[0], "height": pad.size.height[0]}, 
+                               "drill": pad.drill[0], "layers": list(pad.layers),
+                               "removed_unused_layers": pad.removed_unused_layers, "uuid": pad.uuid}, footprint.pads))
+  pins = list(map(lambda pad: [pad["at"]["x"], pad["at"]["y"]], pads_data))
+  lines_data = list(map(lambda line: {"start": {"x": line.start.x[0], "y": line.start.y[0]}, 
+                                      "end": {"x": line.end.x[0], "y": line.end.y[0]}, 
+                                      "stroke": {"width": line.stroke.width[0], "type": line.stroke.type}, 
+                                      "layer": line.layer, "uuid": line.uuid}, footprint.lines))
+  paths = list(map(lambda path: {"start": path.start, "end": path.end}), filter(lines_data, ))
+  print(lines_data)
+  print(pins)
 
-print(parse_footprint("PinHeader_1x02_P2.54mm_Vertical.kicad_mod"))
+extract_footprint("PinHeader_1x02_P2.54mm_Vertical.kicad_mod")
