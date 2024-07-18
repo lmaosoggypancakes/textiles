@@ -140,6 +140,7 @@ def extract_footprint(src):
                                       "layer": line.layer, "uuid": line.uuid}, footprint.lines))
   paths = list(map(lambda path: {"start": path["start"], "end": path["end"]}, lines_data))
   print(paths)
+  
   print(pins)
 
 extract_footprint("PinHeader_1x02_P2.54mm_Vertical.kicad_mod")
