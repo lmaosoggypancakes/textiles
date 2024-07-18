@@ -88,3 +88,30 @@ def export_svg_to_vp3(svg: SVG, filename):
         elif isinstance(part, SVGCircle):
             pass
     write_vp3(pattern, filename)
+
+def export_svg_to_brother(svg: SVG, filename):
+    pattern = EmbPattern()
+    pattern.add_command(JUMP, 10, 10)
+    pattern.add_command(JUMP, 10, svg.y - 10)
+    pattern.add_command(JUMP, svg.x - 10, svg.y-10)
+    pattern.add_command(JUMP, svg.x-10, 10)
+    for part in svg.parts:
+        # core units: 1/10 mm
+        if isinstance(part, SVGPath):
+            (_, x0, y0) = part.instructions[0]
+
+            pattern.add_command(JUMP, x0, y0)
+            start_star = generate_star(x0,y0, 15)
+            for (x,y) in start_star:
+                pattern.add_command(STITCH,x,y)
+            for (_, x, y) in part.instructions:
+                pattern.add_command(STITCH, x, y)
+
+            (_, xf, yf) = part.instructions[-1]
+            end_star = generate_star(xf,yf, 15)
+
+            for (x,y) in end_star:
+                pattern.add_command(STITCH,x,y)
+        elif isinstance(part, SVGCircle):
+            pass
+    write_pes(pattern, filename)

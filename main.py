@@ -138,13 +138,12 @@ async def ws(socket: WebSocket):
                         p2 = list(filter(lambda x: x.ref == conn["pins"][1]["ref"],new_nodes))[0]
                         c = PhysicalConnection(p1,p2,conn["code"])
                         new_connections.append(c)
-            stretchification = float(payload["stretchification"])
+            stretchification = int(payload["stretchification"])
             depth = float(payload["depth"])
             constraints = payload["constraints"]
             max_len = max(map(lambda c: c.get_length() ,new_connections))
             for (i, c) in enumerate(constraints):
                 constraints[i]["node"] = PhysicalNode.from_dict(constraints[i]["node"])
-            print(stretchification, depth)
             if not all([new_nodes, depth]):
                 await socket.send_json({"label": "message", "message": "one of the required fields is missing"})
                 continue
@@ -162,7 +161,7 @@ async def ws(socket: WebSocket):
             new_points = []
             grouped = find_duplicate_connections(new_connections)
             for group in grouped:
-                arc_offset = (math.pi) / (4*len(grouped))
+                arc_offset = (math.pi) / 6*len(grouped)
                 for i, conn in enumerate(group):
                     dx = conn.one.x - conn.two.x
                     dy = conn.one.y - conn.two.y
@@ -174,6 +173,7 @@ async def ws(socket: WebSocket):
                     x2 = conn.two.x + 24*math.cos(angle-arc_offset*i*sign(dx))                    
                     y2 = conn.two.y + 24*math.sin(angle-arc_offset*i*sign(dx))                    
                     
+                    print(f"{stretchification=}")
                     path = create_r_zigzag((x1, y1), (x2, y2), stretchification, depth)
                     new_points.append(path)
             await socket.send_json({"label": "paths", "nodes": [node.serialize() for node in new_nodes], "points": new_points})

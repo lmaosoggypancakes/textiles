@@ -1,5 +1,5 @@
 from svg import SVG
-from embroidery import export_svg_to_processing, export_svg_to_vp3
+from embroidery import export_svg_to_processing, export_svg_to_vp3, export_svg_to_brother
 from helpers import create_r_zigzag
 import math
 
@@ -26,8 +26,8 @@ if __name__ == "__main__":
     s = generate_swatches_constant_stretch(6, 1, 3)
     
     # export_svg_to_processing(s, "./paths/swatches/with_ratio_megastitch.pde")
-    export_svg_to_vp3(s, "./paths/swatches/wensleydale.vp3")
-
+    # export_svg_to_vp3(s, "./paths/swatches/wensleydale.vp3")
+    export_svg_to_brother(s, "./paths/swatches/wensleydale.pes")
     s.save("./paths/swatches/wensleydale.svg")
 
     
