@@ -2,7 +2,7 @@ from typing import List, Union
 import math
 M = "M"
 L = "L"
-BASE_STYLING = "<style>text {font: 24px sans-serif; fill: black;}</style>"
+BASE_STYLING = "<style>text {font: 24px sans-serif; fill: green;}</style>"
 CLOSING = "</svg>"
 
 def sign(x):

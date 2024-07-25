@@ -5,8 +5,8 @@ class Footprint:
         """
         Represents the visual footprint of a given schematic (resistor, chip, whatever)
         """
-        if len(path) == 0:
-            raise Exception("empty footprint")
+        # if len(paths) == 0:
+            # raise Exception("empty footprint")
         for path in paths:
             for (x,y) in path:
                 if x < 0 or x > x_range or y < 0 or y > y_range:
@@ -50,7 +50,7 @@ class Module:
         self.via = via
         self.layers = layers
 
-    def __eq__(self, other: Module):
+    def __eq__(self, other):
         return self.ref == other.ref # REFS SHOULD BE UNIQUE
 
     def serialize(self):
@@ -70,7 +70,7 @@ class Circuit:
             raise Exception("duplicate refs somewhere. fix.")
         self.modules = modules
         self.graph = [None]*len(self.modules)
-        for i in range(self.graph):
+        for i in range(len(self.graph)):
             self.graph[i] = [None]*len(self.modules)
 
     def connect(self, a: Module, b: Module, i: int, j: int, vias=[]):
@@ -115,6 +115,7 @@ def render_circuit(circuit: Circuit) -> SVG :
         x = 400+circle_radius*math.cos(angle)
         y = 400+circle_radius*math.sin(angle)
         svg.circle(x, y, 10, "red")
+        svg.text(x,y-20, m.name)
         for p in m.footprint.paths:
             # render each path with a center of (x,y)
             # so, the path should take up the space defined by
@@ -128,7 +129,7 @@ def render_circuit(circuit: Circuit) -> SVG :
             svg.path(inst, "green")
         
         for (x_p, y_p) in m.footprint.pins:
-            svg.circle(x-m.footprint.range_x+x_p, y-m.footprint.range_y+y_p, 5, "white");
+            svg.circle(x-m.footprint.x_range+x_p, y-m.footprint.y_range+y_p, 5, "white");
     
     for (i, row) in enumerate(circuit.graph):
         for (j, c) in enumerate(row):
@@ -144,3 +145,25 @@ def render_circuit(circuit: Circuit) -> SVG :
                 yb = 400+circle_radius*math.sin(angle2)
                 svg.path([(M, xa, ya), (L, xb, yb)], stroke="purple")
     return svg
+
+if __name__ == "__main__":
+    res_fp = Footprint(
+        [[]], 50, 50, [[25,45], [5, 45]]
+    )
+    res = Module("R1", res_fp, "Resistor", 2);
+
+    pow_fp = Footprint(
+        [[]], 50, 50, [[45, 25]]
+    )
+    power = Module("VCC", pow_fp, "+5V", 1)
+
+    gnd_fp = Footprint(
+        [[]], 50, 50, [[25, 45]]
+    )
+    ground = Module("GND", gnd_fp, "GND", 1)
+
+    circuit = Circuit([res, power, ground])
+    circuit.connect(res, ground, 0, 0);
+    circuit.connect(res, power, 1, 0)
+    
+    render_circuit(circuit).save("circuit.svg")
