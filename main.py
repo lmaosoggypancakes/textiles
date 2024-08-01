@@ -9,6 +9,7 @@ from fastapi import FastAPI, HTTPException, WebSocket
 from pydantic import BaseModel
 from pyparsing.exceptions import ParseException
 from fastapi.middleware.cors import CORSMiddleware
+from parse_netlist import extract_netlist
 
 class File(BaseModel):
     data: str
@@ -65,9 +66,10 @@ def index():
 @app.post("/parse")
 def parse_file(data: File) -> Netlist:
     try:
-        netlist = parse_netlist(data.data)
-        nets = list(map(lambda net: {"name": net.name, "code": net.code, "pins": list(map(lambda pin: {"ref": pin.ref, "num": pin.num}, net.pins))}, netlist.nets))
-        parts = list(map(lambda part: {"ref": part.ref, "value": part.value, "name": part.name}, netlist.parts))
+        # netlist = parse_netlist(data.data)
+        # nets = list(map(lambda net: {"name": net.name, "code": net.code, "pins": list(map(lambda pin: {"ref": pin.ref, "num": pin.num}, net.pins))}, netlist.nets))
+        # parts = list(map(lambda part: {"ref": part.ref, "value": part.value, "name": part.name}, netlist.parts))
+        (nets, parts) = extract_netlist(data.data)
         return {
                 "nets": nets,
                 "parts": parts
@@ -101,9 +103,9 @@ async def ws(socket: WebSocket):
                         nodes.append(PhysicalNode(x, y, part["ref"]))
 
                     for conn in netlist["nets"]:
-                        if len(conn["pins"]) == 2:
-                            p1 = list(filter(lambda x: x.ref == conn["pins"][0]["ref"],nodes))[0]
-                            p2 = list(filter(lambda x: x.ref == conn["pins"][1]["ref"],nodes))[0]
+                        for i in range(1, len(conn["pins"])):
+                            p1 = list(filter(lambda x: x.ref == conn["pins"][i - 1]["ref"],nodes))[0]
+                            p2 = list(filter(lambda x: x.ref == conn["pins"][i]["ref"],nodes))[0]
                             c = PhysicalConnection(p1,p2,conn["code"])
                             connections.append(c)
 

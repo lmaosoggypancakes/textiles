@@ -133,14 +133,33 @@ def extract_footprint(src):
                                "at": {"x": pad.at.x[0], "y": pad.at.y[0]}, "size": {"width": pad.size.width[0], "height": pad.size.height[0]}, 
                                "drill": pad.drill[0], "layers": list(pad.layers),
                                "removed_unused_layers": pad.removed_unused_layers, "uuid": pad.uuid}, footprint.pads))
-  pins = list(map(lambda pad: [pad["at"]["x"], pad["at"]["y"]], pads_data))
+  pins = list(map(lambda pad: (float(pad["at"]["x"]), float(pad["at"]["y"])), pads_data))
   lines_data = list(map(lambda line: {"start": {"x": line.start.x[0], "y": line.start.y[0]}, 
                                       "end": {"x": line.end.x[0], "y": line.end.y[0]}, 
                                       "stroke": {"width": line.stroke.width[0], "type": line.stroke.type}, 
                                       "layer": line.layer, "uuid": line.uuid}, footprint.lines))
-  paths = list(map(lambda path: {"start": path["start"], "end": path["end"]}, lines_data))
-  print(paths)
+  paths = list(map(lambda path: {"start": (float(path["start"]["x"]), float(path["start"]["y"])), 
+                                 "end": (float(path["end"]["x"]), float(path["end"]["y"])),
+                                 "layer": path["layer"]}, lines_data))
+
+  front_courtyard_paths = list(filter(lambda line: line["layer"] == "F.CrtYd", paths))
+  front_silks_paths = list(filter(lambda line: line["layer"] == "F.SilkS", paths))
+
+  fcrtyd_vertices = []
+  for path in front_courtyard_paths:
+    fcrtyd_vertices.append(path["start"])
+    fcrtyd_vertices.append(path["end"])
+
+  x_max = max(fcrtyd_vertices, key=lambda vertex: vertex[0])[0]
+  x_min = min(fcrtyd_vertices, key=lambda vertex: vertex[0])[0]
+  y_max = max(fcrtyd_vertices, key=lambda vertex: vertex[1])[1]
+  y_min = min(fcrtyd_vertices, key=lambda vertex: vertex[1])[1]
+
+  print(x_min, x_max)
+  print(y_min, y_max)
   
+  print(front_courtyard_paths)
+  print(front_silks_paths)
   print(pins)
 
 extract_footprint("PinHeader_1x02_P2.54mm_Vertical.kicad_mod")
