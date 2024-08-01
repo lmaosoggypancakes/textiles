@@ -1,4 +1,5 @@
-from kinparse import parse_netlist
+# do not look this sucks
+from kinparse import parse_netlist # this sucks
 import math
 from helpers import * 
 from graphs import *

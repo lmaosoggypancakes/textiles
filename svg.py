@@ -2,7 +2,7 @@ from typing import List, Union
 import math
 M = "M"
 L = "L"
-BASE_STYLING = "<style>text {font: 24px sans-serif; fill: green;}</style>"
+BASE_STYLING = "<style>text {font: 18px sans-serif; fill: green;}</style>"
 CLOSING = "</svg>"
 
 def sign(x):
@@ -56,6 +56,7 @@ class SVG:
         step_y = dy/n
         angle = math.atan2(dy, dx)
         points = []
+        # i hate this
         for i in range(n):
             if i % 3 == 0:
                 # no zig or zag :3
@@ -89,6 +90,14 @@ class SVG:
         TODO: Parses an SVG file given the path to the svg.
         """
         pass
+
+    def image(self, x,y,width,height,filename):
+         # can i do this
+         with open(filename) as f:
+            svg = f.read()
+            svg = svg[0:5] + f"x='{x}' y='{y}' width='{width}' height='{height}' " + svg[5:] # assume svg[4] == ' '
+            self.draw+=svg
+
 
 class SVGPath:
     def __init__(self, instructions, stroke):

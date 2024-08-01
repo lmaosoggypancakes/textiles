@@ -58,8 +58,8 @@ def create_r_zigzag(one, two, r, n,svg=None):
     else: 
         triangle_angle = math.acos(1/r)
     offset_angle = math.atan2(dy,dx)
-    svg.circle(x1,y1,5,"white")
-    svg.circle(x2,y2,5,"white")
+    svg.circle(x1,y1,2,"white")
+    svg.circle(x2,y2,2,"white")
     inst = [(M, x1, y1)]
     points = [(x1, y1)]
     for i in range(0, n):
@@ -138,3 +138,34 @@ def generate_star(x,y,r):
 def best_path(one, two, obstacles):
     (x1,y1) = one
     (x2,y2) = two
+
+def segments_intersect(x1, y1, x2, y2, x3, y3, x4, y4):
+    def on_segment(px, py, qx, qy, rx, ry):
+        if (min(px, qx) <= rx <= max(px, qx)) and (min(py, qy) <= ry <= max(py, qy)):
+            return True
+        return False
+    
+    def orientation(px, py, qx, qy, rx, ry):
+        val = (qy - py) * (rx - qx) - (qx - px) * (ry - qy)
+        if val == 0:
+            return 0  # collinear
+        elif val > 0:
+            return 1  # clockwise
+        else:
+            return 2  # counterclockwise
+
+    o1 = orientation(x1, y1, x2, y2, x3, y3)
+    o2 = orientation(x1, y1, x2, y2, x4, y4)
+    o3 = orientation(x3, y3, x4, y4, x1, y1)
+    o4 = orientation(x3, y3, x4, y4, x2, y2)
+
+    if o1 != o2 and o3 != o4:
+        return True
+
+    if (o1 == 0 and on_segment(x1, y1, x2, y2, x3, y3)) or \
+       (o2 == 0 and on_segment(x1, y1, x2, y2, x4, y4)) or \
+       (o3 == 0 and on_segment(x3, y3, x4, y4, x1, y1)) or \
+       (o4 == 0 and on_segment(x3, y3, x4, y4, x2, y2)):
+        return True
+
+    return False

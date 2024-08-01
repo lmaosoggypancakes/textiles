@@ -91,27 +91,36 @@ def export_svg_to_vp3(svg: SVG, filename):
 
 def export_svg_to_brother(svg: SVG, filename):
     pattern = EmbPattern()
-    pattern.add_command(JUMP, 10, 10)
-    pattern.add_command(JUMP, 10, svg.y - 10)
-    pattern.add_command(JUMP, svg.x - 10, svg.y-10)
-    pattern.add_command(JUMP, svg.x-10, 10)
+    pattern.add_command(JUMP, 0,0)
+    pattern.add_command(JUMP, svg.x,svg.y)
+    min_x = float("inf")
+    min_y = float("inf")
+    for part in svg.parts:
+        if isinstance(part, SVGPath):
+            for (_, x0, y0) in part.instructions:
+                if x0 < min_x:
+                    min_x = x0
+                if y0 < min_y:
+                    min_y = y0
+
     for part in svg.parts:
         # core units: 1/10 mm
         if isinstance(part, SVGPath):
             (_, x0, y0) = part.instructions[0]
 
-            pattern.add_command(JUMP, x0, y0)
-            start_star = generate_star(x0,y0, 15)
+            pattern.add_command(JUMP, (x0-min_x)*4, (y0-min_y)*4)
+            start_star = generate_star((x0-min_x)*4,(y0-min_y)*4, 16)
             for (x,y) in start_star:
                 pattern.add_command(STITCH,x,y)
             for (_, x, y) in part.instructions:
-                pattern.add_command(STITCH, x, y)
+                pattern.add_command(STITCH, (x-min_x)*4, (y-min_y)*4)
 
             (_, xf, yf) = part.instructions[-1]
-            end_star = generate_star(xf,yf, 15)
+            end_star = generate_star((xf-min_x)*4, (yf-min_y)*4, 16)
 
             for (x,y) in end_star:
                 pattern.add_command(STITCH,x,y)
         elif isinstance(part, SVGCircle):
             pass
+    print('yo')
     write_pes(pattern, filename)
