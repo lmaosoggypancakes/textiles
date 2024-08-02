@@ -126,11 +126,11 @@ class PhysicalNode:
 
 class PhysicalConnection:
     all_connections: List[PhysicalConnection] = []
-    def __init__(self, one: PhysicalNode, two: PhysicalNode, ref, spring=SPRING_EQUILIBRIUM) -> None:
+    def __init__(self, one: PhysicalNode, two: PhysicalNode, pin_one, pin_two, ref, spring=SPRING_EQUILIBRIUM) -> None:
         self.spring = spring
         self.one = one
-        self.angle_one = 0
-        self.angle_two = 0
+        self.pin_one = pin_one
+        self.pin_two = pin_two
         self.two = two
         self.ref = ref
         ione = 0  
@@ -141,8 +141,6 @@ class PhysicalConnection:
             if c.two == self.two or c.two == self.one:
                 itwo += 1
         
-        self.angle_one += ione*math.pi/6
-        self.angle_two += itwo*math.pi/6
         self.all_connections.append(self)
             
 
@@ -194,8 +192,8 @@ class PhysicalConnection:
     def serialize(self) -> Dict[str, Union[str, Dict]]: # type: ignore
         return {
             "one": self.one.serialize(),
-            "one_angle": self.angle_one,
-            "two_angle": self.angle_two,
+            "pin_one": self.pin_one,
+            "pin_two": self.pin_two,
             "two": self.two.serialize(),
             "ref": self.ref
         }

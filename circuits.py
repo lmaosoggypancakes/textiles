@@ -4,20 +4,21 @@ from helpers import * # mainly just using create_r_zigzag
 from embroidery import export_svg_to_brother
 
 class Footprint:
-    def __init__(self, paths: List[List[List[int|float]]], x_range: int|float, y_range: int|float, pins: List[List[int|float]]):
+    def __init__(self, paths: List[List[List[List[int|float]]]], x_range: int|float, y_range: int|float, pins: List[List[int|float]]):
         """
         Represents the visual footprint of a given schematic (resistor, chip, whatever)
         """
         # if len(paths) == 0:
             # raise Exception("empty footprint")
-        for path in paths:
-            for (x,y) in path:
-                if x < 0 or x > x_range or y < 0 or y > y_range:
-                    raise Exception("path point out of bounds: " + (x,y))
+        # for layer in paths:
+        #     for path in layer:
+        #         for (x,y) in path:
+        #             if x < 0 or x > x_range or y < 0 or y > y_range:
+        #                 raise Exception("path point out of bounds: " + (x,y))
 
-        for (x,y) in pins:
-            if x < 0 or x > x_range or y < 0 or y > y_range:
-                raise Exception("pin out of bounds: " + (x,y))
+        # for (x,y) in pins:
+        #     if x < 0 or x > x_range or y < 0 or y > y_range:
+        #         raise Exception("pin out of bounds: " + (x,y))
 
         self.paths = paths
         self.x_range = x_range
@@ -29,7 +30,7 @@ class Footprint:
             "x_range": self.x_range,
             "y_range": self.y_range,
             "pins": self.pins,
-            "path": self.path
+            "paths": self.paths
         }
 
  

@@ -1,3 +1,4 @@
+import os
 from svg import *
 from springs import PhysicalConnection
 from typing import Tuple
@@ -169,3 +170,21 @@ def segments_intersect(x1, y1, x2, y2, x3, y3, x4, y4):
         return True
 
     return False
+
+def getNewConnections(nets, nodes):
+    connections = []
+    for conn in nets:
+        for i in range(1, len(conn["pins"])):
+            p1 = list(filter(lambda x: x.ref == conn["pins"][i - 1]["ref"],nodes))[0]
+            p2 = list(filter(lambda x: x.ref == conn["pins"][i]["ref"],nodes))[0]
+            c = PhysicalConnection(p1,p2,conn["pins"][i - 1]["num"], conn["pins"][i]["num"], conn["code"])
+            connections.append(c)
+    return connections
+
+def getFootprintPath(id, folder):
+    ids = id.split(":")
+    if len(ids) == 2:
+        ids[0] = ids[0] + ".pretty"
+        ids[1] = ids[1] + ".kicad_mod"
+    return os.path.join(".", folder, *ids)
+        

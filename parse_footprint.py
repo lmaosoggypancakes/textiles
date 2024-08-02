@@ -1,4 +1,5 @@
 import logging
+from circuits import Footprint
 from pyparsing import *
 
 def _parse_footprint(text):
@@ -57,17 +58,21 @@ def _parse_footprint(text):
   start = Group(_paren_clause('start', number('x') + number('y')))('start')
   end = Group(_paren_clause('end', number('x') + number('y')))('end')
   width = _paren_clause('width', number('width'))
-  type = _paren_clause('type', inum('type'))
+  type = _paren_clause('type', anystring('type'))
   stroke = Group(_paren_clause('stroke', width & type))('stroke')
   drill = _paren_clause('drill', number('drill'))
   remove_unused_layers = _paren_clause('remove_unused_layers', keyword('bool'))
   xyz = Group(_paren_clause('xyz', number('x') + number('y') + number('z')))
+  center = Group(_paren_clause('center', number('x') + number('y')))
+  fill = _paren_clause('fill', anystring('fill'))
 
   # Shapes
   fp_line = Group(_paren_clause('fp_line', start & end & stroke & layer & uuid))
   fp_text = Group(_paren_clause('fp_text', keyword('author') + qstring('text') + (at & layer & uuid & effects)))
+  fp_circle = Group(_paren_clause('fp_circle', center & end & stroke & fill & layer & uuid))
   lines = ZeroOrMore(fp_line)('lines')
   texts = ZeroOrMore(fp_text)('texts')
+  circles = ZeroOrMore(fp_circle)('circles')
 
   # Pad
   pad = Group(_paren_clause('pad', qstring('number') + keyword('type') + keyword('shape') + (at_2d & size & drill & layers & remove_unused_layers & uuid)))
@@ -90,6 +95,7 @@ def _parse_footprint(text):
     Optional(attr) &
     lines & 
     texts &
+    circles &
     pads &
     Optional(model))) + end_of_file.suppress()
   return parser.parse_string(text)
@@ -133,7 +139,7 @@ def extract_footprint(src):
                                "at": {"x": pad.at.x[0], "y": pad.at.y[0]}, "size": {"width": pad.size.width[0], "height": pad.size.height[0]}, 
                                "drill": pad.drill[0], "layers": list(pad.layers),
                                "removed_unused_layers": pad.removed_unused_layers, "uuid": pad.uuid}, footprint.pads))
-  pins = list(map(lambda pad: (float(pad["at"]["x"]), float(pad["at"]["y"])), pads_data))
+  pins = list(map(lambda pad: (5.0 * float(pad["at"]["x"]), 5.0 * float(pad["at"]["y"])), pads_data))
   lines_data = list(map(lambda line: {"start": {"x": line.start.x[0], "y": line.start.y[0]}, 
                                       "end": {"x": line.end.x[0], "y": line.end.y[0]}, 
                                       "stroke": {"width": line.stroke.width[0], "type": line.stroke.type}, 
@@ -155,11 +161,24 @@ def extract_footprint(src):
   y_max = max(fcrtyd_vertices, key=lambda vertex: vertex[1])[1]
   y_min = min(fcrtyd_vertices, key=lambda vertex: vertex[1])[1]
 
+  output_fcrtyd = []
+  output_silks = []
+
+  if (x_min < 0 or y_min < 0):
+    for path in front_courtyard_paths:
+      output_fcrtyd.append([
+        [5.0 * path["start"][0], 5.0 * path["start"][1]], 
+        [5.0 * path["end"][0], 5.0 * path["end"][1]]])
+    for path in front_silks_paths:
+      output_silks.append([
+        [5.0 * path["start"][0], 5.0 * path["start"][1]], 
+        [5.0 * path["end"][0], 5.0 * path["end"][1]]])
+
   print(x_min, x_max)
   print(y_min, y_max)
   
-  print(front_courtyard_paths)
-  print(front_silks_paths)
-  print(pins)
+  print(output_fcrtyd)
+  print(output_silks)
+  return ([output_fcrtyd, output_silks], x_max - x_min, y_max - y_min, pins)
 
-extract_footprint("PinHeader_1x02_P2.54mm_Vertical.kicad_mod")
+extract_footprint(".\kicad-footprints\Connector_PinHeader_2.54mm.pretty\PinHeader_2x02_P2.54mm_Vertical.kicad_mod")
