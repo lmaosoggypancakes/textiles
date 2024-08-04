@@ -75,10 +75,9 @@ def parse_file(data: File) -> Netlist:
         # nets = list(map(lambda net: {"name": net.name, "code": net.code, "pins": list(map(lambda pin: {"ref": pin.ref, "num": pin.num}, net.pins))}, netlist.nets))
         # parts = list(map(lambda part: {"ref": part.ref, "value": part.value, "name": part.name}, netlist.parts))
         (nets, parts) = extract_netlist(data.data)
-        print(create_simple_circuit(nets, parts).serialize())
         return {
-                "nets": nets,
-                "parts": parts
+            "nets": nets,
+            "parts": parts
         }
     except ParseException as e:
         print(f"There was an error: {e}")
@@ -99,23 +98,9 @@ async def ws(socket: WebSocket):
                 socket.send_json({"label": "message", "message": "You have already set your netlist in this transaction."})
             else:
                 netlist = payload["data"]
-                # create nodes
-                radius=150
-                if len(nodes) == 0: 
-                    for part in netlist["parts"]:
-                        path = getFootprintPath(part["footprint"], "kicad-footprints")
-                        (paths, x_range, y_range, pins) = extract_footprint(path)
-                        footprints[part["ref"]] = Footprint(paths, x_range, y_range, pins).serialize()
+                circuit = create_simple_circuit(netlist["nets"], netlist["parts"])
 
-                    for (i,part) in enumerate(netlist["parts"]):
-                        angle = 2 * math.pi * i/len(netlist["parts"])
-                        x = 100+radius*(1 + math.cos(angle))
-                        y = 100+radius*(1 + math.sin(angle))
-                        nodes.append(PhysicalNode(x, y, part["ref"]))  
-
-                    connections.extend(getNewConnections(netlist["nets"], nodes))
-
-                await socket.send_json({"label": "graph", "nodes": [node.serialize() for node in nodes], "connections": [c.serialize() for c in connections], "footprints": footprints})
+                await socket.send_json({"label": "graph", "circuit": circuit.serialize()})
 
         elif payload["label"] == "get_graph":
             await socket.send_json({"label": "graph", "nodes": [node.serialize() for node in nodes], "connections": [c.serialize() for c in connections]})

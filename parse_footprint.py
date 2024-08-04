@@ -139,7 +139,7 @@ def extract_footprint(src):
                                "at": {"x": pad.at.x[0], "y": pad.at.y[0]}, "size": {"width": pad.size.width[0], "height": pad.size.height[0]}, 
                                "drill": pad.drill[0], "layers": list(pad.layers),
                                "removed_unused_layers": pad.removed_unused_layers, "uuid": pad.uuid}, footprint.pads))
-  pins = list(map(lambda pad: (5.0 * float(pad["at"]["x"]), 5.0 * float(pad["at"]["y"])), pads_data))
+  pins_data = list(map(lambda pad: (float(pad["at"]["x"]), float(pad["at"]["y"])), pads_data))
   lines_data = list(map(lambda line: {"start": {"x": line.start.x[0], "y": line.start.y[0]}, 
                                       "end": {"x": line.end.x[0], "y": line.end.y[0]}, 
                                       "stroke": {"width": line.stroke.width[0], "type": line.stroke.type}, 
@@ -164,15 +164,21 @@ def extract_footprint(src):
   output_fcrtyd = []
   output_silks = []
 
+  x_middle = (x_min + x_max) / 2
+  y_middle = (y_min + y_max) / 2
+
   if (x_min < 0 or y_min < 0):
     for path in front_courtyard_paths:
       output_fcrtyd.append([
-        [5.0 * path["start"][0], 5.0 * path["start"][1]], 
-        [5.0 * path["end"][0], 5.0 * path["end"][1]]])
+        [5.0 * (path["start"][0] - x_middle), 5.0 * (path["start"][1] - y_middle)], 
+        [5.0 * (path["end"][0] - x_middle), 5.0 * (path["end"][1] - y_middle)]])
     for path in front_silks_paths:
       output_silks.append([
-        [5.0 * path["start"][0], 5.0 * path["start"][1]], 
-        [5.0 * path["end"][0], 5.0 * path["end"][1]]])
+        [5.0 * (path["start"][0] - x_middle), 5.0 * (path["start"][1] - y_middle)], 
+        [5.0 * (path["end"][0] - x_middle), 5.0 * (path["end"][1] - y_middle)]])
+      
+  pins = list(map(lambda p: (5.0 * (p[0] - x_middle), 5.0 * (p[1] - y_middle)), pins_data))
+
   return ([output_fcrtyd, output_silks], x_max - x_min, y_max - y_min, pins)
 
 extract_footprint(".\kicad-footprints\Connector_PinHeader_2.54mm.pretty\PinHeader_2x02_P2.54mm_Vertical.kicad_mod")

@@ -42,14 +42,14 @@ class Footprint:
         }
     
 class ConnectionNode:
-    def __init__(self, ref: str, pin_num: int | str, pos: Position = Position(0, 0)):
+    def __init__(self, ref: str, pin: int | str, pos: Position = Position(0, 0)):
         self.ref = ref
-        self.pin_num = pin_num
+        self.pin = pin
         self.pos = pos
     def serialize(self):
         return {
             "ref": self.ref,
-            "pin_num": self.pin_num,
+            "pin": self.pin,
             "pos": self.pos.serialize()
         }
 
@@ -68,7 +68,7 @@ class Trace:
         }
 
 class Component:
-    def __init__(self, ref: str, name: str, pins: int, pos: Position, is_pad = False, pad_connection_node: ConnectionNode = None):
+    def __init__(self, ref: str, name: str, pins: int, pin_coords: List[Position], pos: Position, is_pad = False):
         if ref == "":
             raise Exception("no ref")
         if name == "":
@@ -79,9 +79,12 @@ class Component:
         self.ref = ref
         self.name = name
         self.pins = pins
+        self.pin_coords = pin_coords
         self.pos = pos
         self.is_pad = is_pad
-        self.pad_connection_node = pad_connection_node
+
+    def get_pin_coord(self, pin_num: int):
+        return self.pin_coords[pin_num - 1]
 
     def __eq__(self, other):
         return self.ref == other.ref # REFS SHOULD BE UNIQUE
@@ -91,9 +94,9 @@ class Component:
             "ref": self.ref,
             "name": self.name,
             "pins": self.pins,
+            "pin_coords": list(map(lambda p: p.serialize(), self.pin_coords)),
             "pos": self.pos.serialize(),
             "is_pad": self.is_pad,
-            "pad_connection_node": self.pad_connection_node.serialize() if self.pad_connection_node != None else ""
         }
 
 class Module:
@@ -114,24 +117,28 @@ class Module:
         pad_num = 0
         for c in self.components.values():
             pad_num += c.pins
+
+        conns = []
         
         for c in self.components.values():
             for j in range(c.pins):
                 pin_num = j + 1
-                new_pad_pos = Position(self.radius * math.cos((2*math.pi/pad_num)*len(self.pads)),
-                                       self.radius * math.sin((2*math.pi/pad_num)*len(self.pads)))
+                new_pad_pos = Position((self.radius - 5.0) * math.cos((2*math.pi/pad_num)*len(self.pads)),
+                                       (self.radius - 5.0) * math.sin((2*math.pi/pad_num)*len(self.pads)))
                 # TODO: calculate connection node pos
                 new_pad_ref = f"PAD-{c.ref}-{pin_num}"
                 new_pad = Component(new_pad_ref, f"PAD-{len(self.pads) + 1}",
-                                                1, new_pad_pos, True, ConnectionNode(c.ref, pin_num))
+                                    1, [Position(0.0, 0.0)], new_pad_pos, True)
                 self.pads.append(new_pad)
                 self.pad_refs.append(new_pad_ref)
                 """
-                Connect module pad to component pins
+                Memo the connections to make, because pad is not added to components yet
                 """
-                self.connect(c.ref, pin_num, new_pad_ref, 1)
+                conns.append([c.ref, j, new_pad_ref, 1])
         for p in self.pads:
             self.components[p.ref] = p
+        for c in conns:
+            self.connect(c[0], c[1], c[2], c[3])
 
         self.pos = pos
 
@@ -141,8 +148,10 @@ class Module:
         `a` and `b` must not be via points
         """
         # TODO: Calculate the connnode position here
-        a = ConnectionNode(a_ref, a_pin)
-        b = ConnectionNode(b_ref, b_pin)
+        a_component = self.components[a_ref]
+        b_component = self.components[b_ref]
+        a = ConnectionNode(a_ref, a_pin, a_component.get_pin_coord(a_pin) + a_component.pos)
+        b = ConnectionNode(b_ref, b_pin, b_component.get_pin_coord(b_pin) + b_component.pos)
         self.connections.append(Trace(a, b, vias))
 
     def connections_for_components(self, ref: str):
@@ -161,7 +170,10 @@ class Module:
     def get_pad_num_of_component_pin(self, component_ref: str, pin: int):
         ref = f"PAD-{component_ref}-{pin}"
         if self.components.get(ref):
-            return self.pad_refs.index(ref)
+            """
+            Pad number starts from 1
+            """
+            return self.pad_refs.index(ref) + 1
         return None
     
     def serialize(self):
@@ -205,8 +217,26 @@ class Layer:
         """
 
         # TODO calculate node position
-        a = ConnectionNode(a_ref, a_pin)
-        b = ConnectionNode(b_ref, b_pin)
+        a_module = self.modules[a_ref]
+        b_module = self.modules[b_ref]
+
+        a_pin_coord = Position(0.0, 0.0)
+        b_pin_coord = Position(0.0, 0.0)
+
+        """
+        Pad number starts at 1
+        """
+        if isinstance(a_pin, int):
+            a_pin_coord = a_module.pads[a_pin - 1].get_pin_coord(1) + a_module.pads[a_pin - 1].pos + a_module.pos
+        if isinstance(b_pin, int):
+            b_pin_coord = b_module.pads[b_pin - 1].get_pin_coord(1) + b_module.pads[b_pin - 1].pos + b_module.pos
+        if isinstance(a_pin, str):
+            a_pin_coord = a_module.components[a_pin].get_pin_coord(1) + a_module.components[a_pin].pos + a_module.pos
+        if isinstance(b_pin, str):
+            b_pin_coord = b_module.components[b_pin].get_pin_coord(1) + b_module.components[b_pin].pos + b_module.pos
+
+        a = ConnectionNode(a_ref, a_pin, a_pin_coord)
+        b = ConnectionNode(b_ref, b_pin, b_pin_coord)
 
         self.connections.append(Trace(a, b))
 
@@ -228,14 +258,6 @@ class Layer:
 
     def get_module(self, ref: str):
         return self.modules.get(ref)
-
-    def serialize(self):
-        return {
-            "ref": self.ref,
-            "modules": dict(list(map(lambda ref: (ref, self.modules[ref].serialize()), self.modules))),
-            "connections": list(map(lambda t: t.serialize(), self.connections)),
-            "vias": list(map(lambda v: v.serialize(), self.vias)),
-        }
     
     def get_module_ref_of_component(self, component_ref: str):
         return self.component_to_module[component_ref]
@@ -248,6 +270,14 @@ class Layer:
 
     def __eq__(self, other):
         return self.ref == other.ref
+    
+    def serialize(self):
+        return {
+            "ref": self.ref,
+            "modules": dict(list(map(lambda ref: (ref, self.modules[ref].serialize()), self.modules))),
+            "connections": list(map(lambda t: t.serialize(), self.connections)),
+            "vias": list(map(lambda v: v.serialize(), self.vias)),
+        }
         
 class Circuit:
     def __init__(self, layers: List[Layer], footprints: dict[str, Footprint]):
@@ -280,7 +310,15 @@ parts: list[{ref: str, value: str, name: str, footprint: str}]
 def create_simple_circuit(nets, parts):
     footprints: dict[str, Footprint] = {}
     modules: list[Module] = []
-    circuit_radius = 300
+    circuit_radius = 150
+
+    """
+    Footprint for pad
+    """
+    footprints["pad"] = Footprint([[], [], [[(4.0, 4.0), (4.0, -4.0)], 
+                                    [(4.0, -4.0), (-4.0, -4.0)], 
+                                    [(-4.0, -4.0), (-4.0, 4.0)], 
+                                    [(-4.0, 4.0), (4.0, 4.0)]]], 8.0, 8.0, [(0.0, 0.0)])
 
     for (i, part) in enumerate(parts):
         """
@@ -292,7 +330,8 @@ def create_simple_circuit(nets, parts):
         footprint = Footprint(paths, x_range, y_range, pins)
         footprints[part["ref"]] = footprint
 
-        new_component = Component(part["ref"], part["name"], len(footprint.pins), Position(0.0, 0.0), False, None)
+        new_component = Component(part["ref"], part["name"], len(footprint.pins), 
+                                  list(map(lambda p: Position(p[0], p[1]), footprint.pins)), Position(0.0, 0.0), False)
         angle = 2 * math.pi * i/len(parts)
         new_pos = Position(100+circuit_radius*(1 + math.cos(angle)), 100+circuit_radius*(1 + math.sin(angle)))
         modules.append(Module([new_component], new_pos, 30.0, False))

@@ -11,6 +11,17 @@ class Position:
     def __init__(self, x: float, y: float):
         self.x = x
         self.y = y
+
+    def __add__(self, other):
+        x = self.x + other.x
+        y = self.y + other.y
+        return Position(x, y)
+    
+    def __sub__(self, other):
+        x = self.x - other.x
+        y = self.y - other.y
+        return Position(x, y)
+
     def serialize(self):
         return {
             "x": self.x,
