@@ -1,6 +1,7 @@
 # do not look this sucks
 from kinparse import parse_netlist # this sucks
 import math
+from circuits_new import create_simple_circuit
 from helpers import * 
 from graphs import *
 from parse_footprint import extract_footprint
@@ -74,6 +75,7 @@ def parse_file(data: File) -> Netlist:
         # nets = list(map(lambda net: {"name": net.name, "code": net.code, "pins": list(map(lambda pin: {"ref": pin.ref, "num": pin.num}, net.pins))}, netlist.nets))
         # parts = list(map(lambda part: {"ref": part.ref, "value": part.value, "name": part.name}, netlist.parts))
         (nets, parts) = extract_netlist(data.data)
+        print(create_simple_circuit(nets, parts).serialize())
         return {
                 "nets": nets,
                 "parts": parts

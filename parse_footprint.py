@@ -173,12 +173,6 @@ def extract_footprint(src):
       output_silks.append([
         [5.0 * path["start"][0], 5.0 * path["start"][1]], 
         [5.0 * path["end"][0], 5.0 * path["end"][1]]])
-
-  print(x_min, x_max)
-  print(y_min, y_max)
-  
-  print(output_fcrtyd)
-  print(output_silks)
   return ([output_fcrtyd, output_silks], x_max - x_min, y_max - y_min, pins)
 
 extract_footprint(".\kicad-footprints\Connector_PinHeader_2.54mm.pretty\PinHeader_2x02_P2.54mm_Vertical.kicad_mod")

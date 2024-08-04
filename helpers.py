@@ -7,6 +7,16 @@ import math
 SIZE = 500
 RADIUS = 50
 
+class Position:
+    def __init__(self, x: float, y: float):
+        self.x = x
+        self.y = y
+    def serialize(self):
+        return {
+            "x": self.x,
+            "y": self.y
+        }
+
 
 def create_n_zigzag(one, two, n, zig_size=1):
     """

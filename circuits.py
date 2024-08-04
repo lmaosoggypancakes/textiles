@@ -315,7 +315,7 @@ if __name__ == "__main__":
     res_fp = Footprint(
         [[]], 50, 50, [[25,45], [5, 45]]
     )
-    res = CircuitComponent("R1", res_fp, "Resistor", 2);
+    res = CircuitComponent("R1", res_fp, "Resistor", 2)
 
     pow_fp = Footprint(
         [[]], 50, 50, [[45, 25]]
