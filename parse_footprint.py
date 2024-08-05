@@ -1,6 +1,8 @@
 import logging
 from circuits import Footprint
 from pyparsing import *
+import math
+from typing import List
 
 def _parse_footprint(text):
   def _paren_clause(keyword, subclause):
@@ -63,13 +65,13 @@ def _parse_footprint(text):
   drill = _paren_clause('drill', number('drill'))
   remove_unused_layers = _paren_clause('remove_unused_layers', keyword('bool'))
   xyz = Group(_paren_clause('xyz', number('x') + number('y') + number('z')))
-  center = Group(_paren_clause('center', number('x') + number('y')))
+  center = Group(_paren_clause('center', number('x') + number('y')))('center_pos')
   fill = _paren_clause('fill', anystring('fill'))
 
   # Shapes
   fp_line = Group(_paren_clause('fp_line', start & end & stroke & layer & uuid))
   fp_text = Group(_paren_clause('fp_text', keyword('author') + qstring('text') + (at & layer & uuid & effects)))
-  fp_circle = Group(_paren_clause('fp_circle', center & end & stroke & fill & layer & uuid))
+  fp_circle = Group(_paren_clause('fp_circle', center('center_pos') & end & stroke & fill & layer & uuid))
   lines = ZeroOrMore(fp_line)('lines')
   texts = ZeroOrMore(fp_text)('texts')
   circles = ZeroOrMore(fp_circle)('circles')
@@ -132,6 +134,16 @@ def parse_footprint(src, tool='kicad'):
     # OK, that didn't work so well...
     logging.error('Unsupported ECAD tool library: {}'.format(tool))
     raise Exception
+  
+
+class Shape:
+    def __init__(self, paths: List[List[List[int|float]]]):
+        self.paths = paths
+
+    def serialize(self):
+        return {
+            "paths": self.paths,
+        }
     
 def extract_footprint(src):
   footprint = parse_footprint(src)
@@ -144,9 +156,23 @@ def extract_footprint(src):
                                       "end": {"x": line.end.x[0], "y": line.end.y[0]}, 
                                       "stroke": {"width": line.stroke.width[0], "type": line.stroke.type}, 
                                       "layer": line.layer, "uuid": line.uuid}, footprint.lines))
+  circles_data = list(map(lambda circle: {"center": {"x": circle.center_pos.x[0], "y": circle.center_pos.y[0]},
+                                      "end": {"x": circle.end.x[0], "y": circle.end.y[0]}, 
+                                      "stroke": {"width": circle.stroke.width[0], "type": circle.stroke.type}, 
+                                      "layer": circle.layer, "uuid": circle.uuid}, footprint.circles))
   paths = list(map(lambda path: {"start": (float(path["start"]["x"]), float(path["start"]["y"])), 
                                  "end": (float(path["end"]["x"]), float(path["end"]["y"])),
                                  "layer": path["layer"]}, lines_data))
+  
+  for circle in circles_data:
+    radius = math.sqrt(pow(float(circle["end"]["x"]) - float(circle["center"]["x"]), 2) + 
+                       pow(float(circle["end"]["y"]) - float(circle["center"]["y"]), 2))
+    for i in range(1, 25):
+      paths.append({"start": (float(radius * math.cos((i % 24) * 2 * math.pi/24)), 
+                              float(radius * math.sin((i % 24) * 2 * math.pi/24))),
+                    "end": (float(radius * math.cos(((i - 1) % 24) * 2 * math.pi/24)), 
+                            float(radius * math.sin(((i - 1) % 24) * 2 * math.pi/24))),
+                    "layer": circle["layer"]})
 
   front_courtyard_paths = list(filter(lambda line: line["layer"] == "F.CrtYd", paths))
   front_silks_paths = list(filter(lambda line: line["layer"] == "F.SilkS", paths))
@@ -161,24 +187,60 @@ def extract_footprint(src):
   y_max = max(fcrtyd_vertices, key=lambda vertex: vertex[1])[1]
   y_min = min(fcrtyd_vertices, key=lambda vertex: vertex[1])[1]
 
-  output_fcrtyd = []
-  output_silks = []
+  shape_fcrtyd = []
+  shape_silks = []
 
   x_middle = (x_min + x_max) / 2
   y_middle = (y_min + y_max) / 2
 
   if (x_min < 0 or y_min < 0):
     for path in front_courtyard_paths:
-      output_fcrtyd.append([
+      shape_fcrtyd.append([
         [5.0 * (path["start"][0] - x_middle), 5.0 * (path["start"][1] - y_middle)], 
         [5.0 * (path["end"][0] - x_middle), 5.0 * (path["end"][1] - y_middle)]])
     for path in front_silks_paths:
-      output_silks.append([
+      shape_silks.append([
         [5.0 * (path["start"][0] - x_middle), 5.0 * (path["start"][1] - y_middle)], 
         [5.0 * (path["end"][0] - x_middle), 5.0 * (path["end"][1] - y_middle)]])
       
+  output_fcrtyd = [Shape(shape_fcrtyd)]
+  output_silks = [Shape(shape_silks)]
+      
+  output_cu: List[Shape] = []
+
+  for pad in pads_data:
+    shape_path = []
+    if pad["shape"] == "rect":
+      pad_pos = pad["at"]
+      shape_path.append([
+        [5.0 * (float(pad["size"]["width"])/2) + 5.0 * (float(pad_pos["x"]) - x_middle), 5.0 * (float(pad["size"]["height"])/2) + 5.0 * (float(pad_pos["y"]) - y_middle)],
+        [5.0 * (float(pad["size"]["width"])/2) + 5.0 * (float(pad_pos["x"]) - x_middle), -5.0 * (float(pad["size"]["height"])/2) + 5.0 * (float(pad_pos["y"]) - y_middle)],
+      ])
+      shape_path.append([
+        [5.0 * (float(pad["size"]["width"])/2) + 5.0 * (float(pad_pos["x"]) - x_middle), -5.0 * (float(pad["size"]["height"])/2) + 5.0 * (float(pad_pos["y"]) - y_middle)],
+        [-5.0 * (float(pad["size"]["width"])/2) + 5.0 * (float(pad_pos["x"]) - x_middle), -5.0 * (float(pad["size"]["height"])/2) + 5.0 * (float(pad_pos["y"]) - y_middle)],
+      ])
+      shape_path.append([
+        [-5.0 * (float(pad["size"]["width"])/2) + 5.0 * (float(pad_pos["x"]) - x_middle), -5.0 * (float(pad["size"]["height"])/2) + 5.0 * (float(pad_pos["y"]) - y_middle)],
+        [-5.0 * (float(pad["size"]["width"])/2) + 5.0 * (float(pad_pos["x"]) - x_middle), 5.0 * (float(pad["size"]["height"])/2) + 5.0 * (float(pad_pos["y"]) - y_middle)],
+      ])
+      shape_path.append([
+        [-5.0 * (float(pad["size"]["width"])/2) + 5.0 * (float(pad_pos["x"]) - x_middle), 5.0 * (float(pad["size"]["height"])/2) + 5.0 * (float(pad_pos["y"]) - y_middle)],
+        [5.0 * (float(pad["size"]["width"])/2) + 5.0 * (float(pad_pos["x"]) - x_middle), 5.0 * (float(pad["size"]["height"])/2) + 5.0 * (float(pad_pos["y"]) - y_middle)],
+      ])
+    if pad["shape"] == "oval" or pad["shape"] == "circle":
+      for i in range(1, 25):
+        pad_pos = pad["at"]
+        shape_path.append([
+          [5.0 * ((float(pad["size"]["width"])/2) * math.cos((i % 24) * 2 * math.pi/24) + float(pad_pos["x"]) - x_middle), 
+           5.0 * ((float(pad["size"]["height"])/2) * math.sin((i % 24) * 2 * math.pi/24) + float(pad_pos["y"]) - y_middle)],
+          [5.0 * ((float(pad["size"]["width"])/2) * math.cos((i % 24) * 2 * math.pi/24) + float(pad_pos["x"]) - x_middle), 
+           5.0 * ((float(pad["size"]["height"])/2) * math.sin((i % 24) * 2 * math.pi/24) + float(pad_pos["y"]) - y_middle)],
+        ])
+    output_cu.append(Shape(shape_path))
+      
   pins = list(map(lambda p: (5.0 * (p[0] - x_middle), 5.0 * (p[1] - y_middle)), pins_data))
 
-  return ([output_fcrtyd, output_silks], x_max - x_min, y_max - y_min, pins)
+  return ([output_fcrtyd, output_silks, output_cu], 5.0 * (x_max - x_min), 5.0 * (y_max - y_min), pins)
 
 extract_footprint(".\kicad-footprints\Connector_PinHeader_2.54mm.pretty\PinHeader_2x02_P2.54mm_Vertical.kicad_mod")

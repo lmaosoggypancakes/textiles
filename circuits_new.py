@@ -1,5 +1,5 @@
 from typing import *
-from parse_footprint import extract_footprint
+from parse_footprint import extract_footprint, Shape
 from svg import *
 from helpers import * # mainly just using create_r_zigzag
 from embroidery import export_svg_to_brother
@@ -23,7 +23,7 @@ create_basic_circuit => Creates a simple circuit from the netlist and footprints
 """
 
 class Footprint:
-    def __init__(self, paths: List[List[List[List[int|float]]]], width, height, pins: List[List[int|float]]):
+    def __init__(self, paths: List[List[Shape]], width, height, pins: List[List[int|float]]):
         """
         Represents the visual footprint of a given schematic (resistor, chip, whatever)
         """
@@ -36,7 +36,7 @@ class Footprint:
     def serialize(self):
         return {
             "pins": self.pins,
-            "paths": self.paths,
+            "paths": list(map(lambda path: list(map(lambda shape: shape.serialize(), path)),self.paths)),
             "width": self.width,
             "height": self.height
         }
@@ -68,7 +68,7 @@ class Trace:
         }
 
 class Component:
-    def __init__(self, ref: str, name: str, pins: int, pin_coords: List[Position], pos: Position, is_pad = False):
+    def __init__(self, ref: str, name: str, pins: int, pin_coords: List[Position], pos: Position, width: float, height: float, is_pad = False):
         if ref == "":
             raise Exception("no ref")
         if name == "":
@@ -81,6 +81,8 @@ class Component:
         self.pins = pins
         self.pin_coords = pin_coords
         self.pos = pos
+        self.width = width
+        self.height = height
         self.is_pad = is_pad
 
     def get_pin_coord(self, pin_num: int):
@@ -96,6 +98,8 @@ class Component:
             "pins": self.pins,
             "pin_coords": list(map(lambda p: p.serialize(), self.pin_coords)),
             "pos": self.pos.serialize(),
+            "width": self.width,
+            "height": self.height,
             "is_pad": self.is_pad,
         }
 
@@ -128,7 +132,7 @@ class Module:
                 # TODO: calculate connection node pos
                 new_pad_ref = f"PAD-{c.ref}-{pin_num}"
                 new_pad = Component(new_pad_ref, f"PAD-{len(self.pads) + 1}",
-                                    1, [Position(0.0, 0.0)], new_pad_pos, True)
+                                    1, [Position(0.0, 0.0)], new_pad_pos, 8.0, 8.0, True)
                 self.pads.append(new_pad)
                 self.pad_refs.append(new_pad_ref)
                 """
@@ -315,10 +319,10 @@ def create_simple_circuit(nets, parts):
     """
     Footprint for pad
     """
-    footprints["pad"] = Footprint([[], [], [[(4.0, 4.0), (4.0, -4.0)], 
+    footprints["pad"] = Footprint([[], [], [Shape([[(4.0, 4.0), (4.0, -4.0)], 
                                     [(4.0, -4.0), (-4.0, -4.0)], 
                                     [(-4.0, -4.0), (-4.0, 4.0)], 
-                                    [(-4.0, 4.0), (4.0, 4.0)]]], 8.0, 8.0, [(0.0, 0.0)])
+                                    [(-4.0, 4.0), (4.0, 4.0)]])]], 8.0, 8.0, [(0.0, 0.0)])
 
     for (i, part) in enumerate(parts):
         """
@@ -331,7 +335,8 @@ def create_simple_circuit(nets, parts):
         footprints[part["ref"]] = footprint
 
         new_component = Component(part["ref"], part["name"], len(footprint.pins), 
-                                  list(map(lambda p: Position(p[0], p[1]), footprint.pins)), Position(0.0, 0.0), False)
+                                  list(map(lambda p: Position(p[0], p[1]), footprint.pins)), 
+                                  Position(0.0, 0.0), footprint.width, footprint.height, False)
         angle = 2 * math.pi * i/len(parts)
         new_pos = Position(100+circuit_radius*(1 + math.cos(angle)), 100+circuit_radius*(1 + math.sin(angle)))
         modules.append(Module([new_component], new_pos, 30.0, False))
