@@ -84,6 +84,7 @@ class Component:
         self.width = width
         self.height = height
         self.is_pad = is_pad
+        self.angle = 0
 
     def get_pin_coord(self, pin_num: int):
         return self.pin_coords[pin_num - 1]
@@ -101,6 +102,7 @@ class Component:
             "width": self.width,
             "height": self.height,
             "is_pad": self.is_pad,
+            "angle": self.angle
         }
 
 class Module:
@@ -118,6 +120,7 @@ class Module:
         self.pad_refs: List[str] = []
 
         self.radius = radius
+        self.angle = 0
         pad_num = 0
         for c in self.components.values():
             pad_num += c.pins
@@ -138,7 +141,7 @@ class Module:
                 """
                 Memo the connections to make, because pad is not added to components yet
                 """
-                conns.append([c.ref, j, new_pad_ref, 1])
+                conns.append([c.ref, pin_num, new_pad_ref, 1])
         for p in self.pads:
             self.components[p.ref] = p
         for c in conns:
@@ -187,7 +190,8 @@ class Module:
             "connections": list(map(lambda t: t.serialize(), self.connections)),
             "pads": list(map(lambda p: p.serialize(), self.pads)),
             "radius": self.radius,
-            "pos": self.pos.serialize()
+            "pos": self.pos.serialize(),
+            "angle": self.angle
         }
 
     def __eq__(self, other):
