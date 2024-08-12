@@ -55,6 +55,7 @@ class ConnectionNode:
 
 class Trace:
     def __init__(self, a: ConnectionNode, b: ConnectionNode, vias = []):
+        self.ref = f"{a.ref}-{a.pin}-{b.ref}-{b.pin}"
         self.a = a
         self.b = b
         self.points: List[Position] = [a.pos, *vias, b.pos]
@@ -62,6 +63,7 @@ class Trace:
         self.points.insert(idx, pos)
     def serialize(self):
         return {
+            "ref": self.ref,
             "a": self.a.serialize(),
             "b": self.b.serialize(),
             "points": list(map(lambda p: p.serialize(), self.points))
@@ -156,7 +158,7 @@ class Module:
         if len(via_layers) == 1 and is_via:
             raise Exception("Via must connect multiple layers.")
         self.components: dict[str, Component] = dict(list(map(lambda c: (c.ref, c), components)))
-        self.connections: List[Trace] = []
+        self.connections: dict[str, Trace] = dict()
         self.pads: List[Component] = []
         self.pad_refs: List[str] = []
 
@@ -199,13 +201,14 @@ class Module:
         b_component = self.components[b_ref]
         a = ConnectionNode(a_ref, a_pin, a_component.get_pin_coord(a_pin) + a_component.pos)
         b = ConnectionNode(b_ref, b_pin, b_component.get_pin_coord(b_pin) + b_component.pos)
-        self.connections.append(Trace(a, b, vias))
+        trace = Trace(a, b, vias)
+        self.connections[trace.ref] = trace
 
     def connections_for_components(self, ref: str):
         """
         Return Trace objects that have the ref component in one of the vertices
         """
-        ret = list(filter(lambda c: c.a.ref == ref or c.b.ref == ref, self.connections))
+        ret = list(filter(lambda c: c[1].a.ref == ref or c[1].b.ref == ref, self.connections.items()))
         return ret
     
     def get_pad_ref_of_component_pin(self, component_ref: str, pin: int):
@@ -227,7 +230,7 @@ class Module:
         return {
             "ref": self.ref,
             "components": dict(list(map(lambda ref: (ref, self.components[ref].serialize()), self.components))),
-            "connections": list(map(lambda t: t.serialize(), self.connections)),
+            "connections": dict(list(map(lambda ref: (ref, self.connections[ref].serialize()), self.connections))),
             "pads": list(map(lambda p: p.serialize(), self.pads)),
             "radius": self.radius,
             "pos": self.pos.serialize(),
@@ -249,7 +252,7 @@ class Layer:
             raise Exception("A module must have a component.")
         self.ref = ref
         self.modules: dict[str, Module] = dict(list(map(lambda m: (m.ref, m), modules)))
-        self.connections: List[Trace] = []
+        self.connections: dict[str, Trace] = dict()
         self.vias: List[Module] = []
 
         self.component_to_module: dict[str, str] = {}
@@ -286,7 +289,8 @@ class Layer:
         a = ConnectionNode(a_ref, a_pin, a_pin_coord)
         b = ConnectionNode(b_ref, b_pin, b_pin_coord)
 
-        self.connections.append(Trace(a, b))
+        trace = Trace(a, b)
+        self.connections[trace.ref] = trace
 
     def connections_for_modules(self, ref: str):
         """
@@ -295,7 +299,7 @@ class Layer:
         i, j are pins, ...V and j are module indexes.
         min length of any set is 3. (i,j,V=[],b)
         """
-        return list(filter(lambda c: c.a.ref == ref or c.b.ref == ref, self.connections))
+        return list(filter(lambda c: c[1].a.ref == ref or c[1].b.ref == ref, self.connections.items()))
     
     def add_via(self, new_via: Module):
         """
@@ -323,7 +327,7 @@ class Layer:
         return {
             "ref": self.ref,
             "modules": dict(list(map(lambda ref: (ref, self.modules[ref].serialize()), self.modules))),
-            "connections": list(map(lambda t: t.serialize(), self.connections)),
+            "connections": dict(list(map(lambda ref: (ref, self.connections[ref].serialize()), self.connections))),
             "vias": list(map(lambda v: v.serialize(), self.vias)),
         }
         
