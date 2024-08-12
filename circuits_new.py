@@ -23,7 +23,7 @@ create_basic_circuit => Creates a simple circuit from the netlist and footprints
 """
 
 class Footprint:
-    def __init__(self, paths: List[List[Shape]], width, height, pins: List[List[int|float]]):
+    def __init__(self, paths: List[List[Shape]], width, height, pins: List[Position]):
         """
         Represents the visual footprint of a given schematic (resistor, chip, whatever)
         """
@@ -35,7 +35,7 @@ class Footprint:
 
     def serialize(self):
         return {
-            "pins": self.pins,
+            "pins": list(map(lambda pin: pin.serialize(),self.pins)),
             "paths": list(map(lambda path: list(map(lambda shape: shape.serialize(), path)),self.paths)),
             "width": self.width,
             "height": self.height
@@ -105,6 +105,47 @@ class Component:
             "angle": self.angle
         }
 
+def get_pad_pos(pad_pos: int, r: float):
+    radius = r - 4
+    if pad_pos == 0: 
+      return Position(radius * math.cos(math.pi / 4), radius * math.sin(math.pi / 4))
+    if pad_pos == 1: 
+      return Position(
+        radius * math.cos((math.pi * 7) / 16),
+        radius * math.sin((math.pi * 7) / 16),
+      )
+    if pad_pos == 2: 
+      return Position(
+        radius * math.cos((math.pi * 9) / 16),
+        radius * math.sin((math.pi * 9) / 16),
+      )
+    if pad_pos == 3: 
+      return Position(
+        radius * math.cos((math.pi * 3) / 4),
+        radius * math.sin((math.pi * 3) / 4),
+      )
+    if pad_pos == 4: 
+      return Position(
+        radius * math.cos((math.pi * 5) / 4),
+        radius * math.sin((math.pi * 5) / 4),
+      )
+    if pad_pos == 5: 
+      return Position(
+        radius * math.cos((math.pi * 23) / 16),
+        radius * math.sin((math.pi * 23) / 16),
+      )
+    if pad_pos == 6: 
+      return Position(
+        radius * math.cos((math.pi * 25) / 16),
+        radius * math.sin((math.pi * 25) / 16),
+      )
+    if pad_pos == 7: 
+      return Position(
+        radius * math.cos((math.pi * 7) / 4),
+        radius * math.sin((math.pi * 7) / 4),
+      )
+
+
 class Module:
     def __init__(self, components: List[Component], pos: Position, radius: float = 300.0, is_via=False, via_layers = [], ref = ""):
         if len(components) == 0 and not is_via:
@@ -130,8 +171,7 @@ class Module:
         for c in self.components.values():
             for j in range(c.pins):
                 pin_num = j + 1
-                new_pad_pos = Position((self.radius - 5.0) * math.cos((2*math.pi/pad_num)*len(self.pads)),
-                                       (self.radius - 5.0) * math.sin((2*math.pi/pad_num)*len(self.pads)))
+                new_pad_pos = get_pad_pos(j, radius)
                 # TODO: calculate connection node pos
                 new_pad_ref = f"PAD-{c.ref}-{pin_num}"
                 new_pad = Component(new_pad_ref, f"PAD-{len(self.pads) + 1}",
@@ -323,10 +363,10 @@ def create_simple_circuit(nets, parts):
     """
     Footprint for pad
     """
-    footprints["pad"] = Footprint([[], [], [Shape([[(4.0, 4.0), (4.0, -4.0)], 
-                                    [(4.0, -4.0), (-4.0, -4.0)], 
-                                    [(-4.0, -4.0), (-4.0, 4.0)], 
-                                    [(-4.0, 4.0), (4.0, 4.0)]])]], 8.0, 8.0, [(0.0, 0.0)])
+    footprints["pad"] = Footprint([[], [], [Shape([[Position(4.0, 4.0), Position(4.0, -4.0)], 
+                                    [Position(4.0, -4.0), Position(-4.0, -4.0)], 
+                                    [Position(-4.0, -4.0), Position(-4.0, 4.0)], 
+                                    [Position(-4.0, 4.0), Position(4.0, 4.0)]])]], 8.0, 8.0, [Position(0.0, 0.0)])
 
     for (i, part) in enumerate(parts):
         """
@@ -339,8 +379,7 @@ def create_simple_circuit(nets, parts):
         footprints[part["ref"]] = footprint
 
         new_component = Component(part["ref"], part["name"], len(footprint.pins), 
-                                  list(map(lambda p: Position(p[0], p[1]), footprint.pins)), 
-                                  Position(0.0, 0.0), footprint.width, footprint.height, False)
+                                  footprint.pins, Position(0.0, 0.0), footprint.width, footprint.height, False)
         angle = 2 * math.pi * i/len(parts)
         new_pos = Position(100+circuit_radius*(1 + math.cos(angle)), 100+circuit_radius*(1 + math.sin(angle)))
         modules.append(Module([new_component], new_pos, 30.0, False))

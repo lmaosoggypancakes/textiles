@@ -3,6 +3,7 @@ from circuits import Footprint
 from pyparsing import *
 import math
 from typing import List
+from helpers import Position
 
 def _parse_footprint(text):
   def _paren_clause(keyword, subclause):
@@ -137,12 +138,12 @@ def parse_footprint(src, tool='kicad'):
   
 
 class Shape:
-    def __init__(self, paths: List[List[List[int|float]]]):
-        self.paths = paths
+    def __init__(self, paths: List[List[Position]]):
+        self.paths: List[List[Position]] = paths
 
     def serialize(self):
         return {
-            "paths": self.paths,
+            "paths": list(map(lambda path: list(map(lambda pos: pos.serialize(), path)),self.paths)),
         }
     
 def extract_footprint(src):
@@ -196,15 +197,16 @@ def extract_footprint(src):
   if (x_min < 0 or y_min < 0):
     for path in front_courtyard_paths:
       shape_fcrtyd.append([
-        [5.0 * (path["start"][0] - x_middle), 5.0 * (path["start"][1] - y_middle)], 
-        [5.0 * (path["end"][0] - x_middle), 5.0 * (path["end"][1] - y_middle)]])
+        Position(5.0 * (path["start"][0] - x_middle), 5.0 * (path["start"][1] - y_middle)), 
+        Position(5.0 * (path["end"][0] - x_middle), 5.0 * (path["end"][1] - y_middle))])
     for path in front_silks_paths:
       shape_silks.append([
-        [5.0 * (path["start"][0] - x_middle), 5.0 * (path["start"][1] - y_middle)], 
-        [5.0 * (path["end"][0] - x_middle), 5.0 * (path["end"][1] - y_middle)]])
-      
+        Position(5.0 * (path["start"][0] - x_middle), 5.0 * (path["start"][1] - y_middle)), 
+        Position(5.0 * (path["end"][0] - x_middle), 5.0 * (path["end"][1] - y_middle))])
+  
   output_fcrtyd = [Shape(shape_fcrtyd)]
   output_silks = [Shape(shape_silks)]
+
       
   output_cu: List[Shape] = []
 
@@ -213,33 +215,33 @@ def extract_footprint(src):
     if pad["shape"] == "rect":
       pad_pos = pad["at"]
       shape_path.append([
-        [5.0 * (float(pad["size"]["width"])/2) + 5.0 * (float(pad_pos["x"]) - x_middle), 5.0 * (float(pad["size"]["height"])/2) + 5.0 * (float(pad_pos["y"]) - y_middle)],
-        [5.0 * (float(pad["size"]["width"])/2) + 5.0 * (float(pad_pos["x"]) - x_middle), -5.0 * (float(pad["size"]["height"])/2) + 5.0 * (float(pad_pos["y"]) - y_middle)],
+        Position(5.0 * (float(pad["size"]["width"])/2) + 5.0 * (float(pad_pos["x"]) - x_middle), 5.0 * (float(pad["size"]["height"])/2) + 5.0 * (float(pad_pos["y"]) - y_middle)),
+        Position(5.0 * (float(pad["size"]["width"])/2) + 5.0 * (float(pad_pos["x"]) - x_middle), -5.0 * (float(pad["size"]["height"])/2) + 5.0 * (float(pad_pos["y"]) - y_middle)),
       ])
       shape_path.append([
-        [5.0 * (float(pad["size"]["width"])/2) + 5.0 * (float(pad_pos["x"]) - x_middle), -5.0 * (float(pad["size"]["height"])/2) + 5.0 * (float(pad_pos["y"]) - y_middle)],
-        [-5.0 * (float(pad["size"]["width"])/2) + 5.0 * (float(pad_pos["x"]) - x_middle), -5.0 * (float(pad["size"]["height"])/2) + 5.0 * (float(pad_pos["y"]) - y_middle)],
+        Position(5.0 * (float(pad["size"]["width"])/2) + 5.0 * (float(pad_pos["x"]) - x_middle), -5.0 * (float(pad["size"]["height"])/2) + 5.0 * (float(pad_pos["y"]) - y_middle)),
+        Position(-5.0 * (float(pad["size"]["width"])/2) + 5.0 * (float(pad_pos["x"]) - x_middle), -5.0 * (float(pad["size"]["height"])/2) + 5.0 * (float(pad_pos["y"]) - y_middle)),
       ])
       shape_path.append([
-        [-5.0 * (float(pad["size"]["width"])/2) + 5.0 * (float(pad_pos["x"]) - x_middle), -5.0 * (float(pad["size"]["height"])/2) + 5.0 * (float(pad_pos["y"]) - y_middle)],
-        [-5.0 * (float(pad["size"]["width"])/2) + 5.0 * (float(pad_pos["x"]) - x_middle), 5.0 * (float(pad["size"]["height"])/2) + 5.0 * (float(pad_pos["y"]) - y_middle)],
+        Position(-5.0 * (float(pad["size"]["width"])/2) + 5.0 * (float(pad_pos["x"]) - x_middle), -5.0 * (float(pad["size"]["height"])/2) + 5.0 * (float(pad_pos["y"]) - y_middle)),
+        Position(-5.0 * (float(pad["size"]["width"])/2) + 5.0 * (float(pad_pos["x"]) - x_middle), 5.0 * (float(pad["size"]["height"])/2) + 5.0 * (float(pad_pos["y"]) - y_middle)),
       ])
       shape_path.append([
-        [-5.0 * (float(pad["size"]["width"])/2) + 5.0 * (float(pad_pos["x"]) - x_middle), 5.0 * (float(pad["size"]["height"])/2) + 5.0 * (float(pad_pos["y"]) - y_middle)],
-        [5.0 * (float(pad["size"]["width"])/2) + 5.0 * (float(pad_pos["x"]) - x_middle), 5.0 * (float(pad["size"]["height"])/2) + 5.0 * (float(pad_pos["y"]) - y_middle)],
+        Position(-5.0 * (float(pad["size"]["width"])/2) + 5.0 * (float(pad_pos["x"]) - x_middle), 5.0 * (float(pad["size"]["height"])/2) + 5.0 * (float(pad_pos["y"]) - y_middle)),
+        Position(5.0 * (float(pad["size"]["width"])/2) + 5.0 * (float(pad_pos["x"]) - x_middle), 5.0 * (float(pad["size"]["height"])/2) + 5.0 * (float(pad_pos["y"]) - y_middle)),
       ])
     if pad["shape"] == "oval" or pad["shape"] == "circle":
       for i in range(1, 25):
         pad_pos = pad["at"]
         shape_path.append([
-          [5.0 * ((float(pad["size"]["width"])/2) * math.cos((i % 24) * 2 * math.pi/24) + float(pad_pos["x"]) - x_middle), 
-           5.0 * ((float(pad["size"]["height"])/2) * math.sin((i % 24) * 2 * math.pi/24) + float(pad_pos["y"]) - y_middle)],
-          [5.0 * ((float(pad["size"]["width"])/2) * math.cos((i % 24) * 2 * math.pi/24) + float(pad_pos["x"]) - x_middle), 
-           5.0 * ((float(pad["size"]["height"])/2) * math.sin((i % 24) * 2 * math.pi/24) + float(pad_pos["y"]) - y_middle)],
+          Position(5.0 * ((float(pad["size"]["width"])/2) * math.cos((i % 24) * 2 * math.pi/24) + float(pad_pos["x"]) - x_middle), 
+           5.0 * ((float(pad["size"]["height"])/2) * math.sin((i % 24) * 2 * math.pi/24) + float(pad_pos["y"]) - y_middle)),
+          Position(5.0 * ((float(pad["size"]["width"])/2) * math.cos((i % 24) * 2 * math.pi/24) + float(pad_pos["x"]) - x_middle), 
+           5.0 * ((float(pad["size"]["height"])/2) * math.sin((i % 24) * 2 * math.pi/24) + float(pad_pos["y"]) - y_middle)),
         ])
     output_cu.append(Shape(shape_path))
       
-  pins = list(map(lambda p: (5.0 * (p[0] - x_middle), 5.0 * (p[1] - y_middle)), pins_data))
+  pins = list(map(lambda p: Position(5.0 * (p[0] - x_middle), 5.0 * (p[1] - y_middle)), pins_data))
 
   return ([output_fcrtyd, output_silks, output_cu], 5.0 * (x_max - x_min), 5.0 * (y_max - y_min), pins)
 
