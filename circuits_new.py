@@ -58,7 +58,7 @@ class Trace:
         self.ref = f"{a.ref}-{a.pin}-{b.ref}-{b.pin}"
         self.a = a
         self.b = b
-        self.points: List[Position] = [a.pos, *vias, b.pos]
+        self.points: List[Position] = []
     def add_via(self, pos: Position, idx: int):
         self.points.insert(idx, pos)
     def serialize(self):
