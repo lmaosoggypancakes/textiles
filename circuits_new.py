@@ -108,18 +108,18 @@ class Component:
         }
 
 def get_pad_pos(pad_pos: int, r: float):
-    radius = r - 4
+    radius = r
     if pad_pos == 0: 
       return Position(radius * math.cos(math.pi / 4), radius * math.sin(math.pi / 4))
     if pad_pos == 1: 
       return Position(
-        radius * math.cos((math.pi * 7) / 16),
-        radius * math.sin((math.pi * 7) / 16),
+        radius * math.cos((math.pi * 5) / 12),
+        radius * math.sin((math.pi * 5) / 12),
       )
     if pad_pos == 2: 
       return Position(
-        radius * math.cos((math.pi * 9) / 16),
-        radius * math.sin((math.pi * 9) / 16),
+        radius * math.cos((math.pi * 7) / 12),
+        radius * math.sin((math.pi * 7) / 12),
       )
     if pad_pos == 3: 
       return Position(
@@ -133,13 +133,13 @@ def get_pad_pos(pad_pos: int, r: float):
       )
     if pad_pos == 5: 
       return Position(
-        radius * math.cos((math.pi * 23) / 16),
-        radius * math.sin((math.pi * 23) / 16),
+        radius * math.cos((math.pi * 17) / 12),
+        radius * math.sin((math.pi * 17) / 12),
       )
     if pad_pos == 6: 
       return Position(
-        radius * math.cos((math.pi * 25) / 16),
-        radius * math.sin((math.pi * 25) / 16),
+        radius * math.cos((math.pi * 19) / 12),
+        radius * math.sin((math.pi * 19) / 12),
       )
     if pad_pos == 7: 
       return Position(
@@ -367,10 +367,15 @@ def create_simple_circuit(nets, parts):
     """
     Footprint for pad
     """
-    footprints["pad"] = Footprint([[], [], [Shape([[Position(4.0, 4.0), Position(4.0, -4.0)], 
-                                    [Position(4.0, -4.0), Position(-4.0, -4.0)], 
-                                    [Position(-4.0, -4.0), Position(-4.0, 4.0)], 
-                                    [Position(-4.0, 4.0), Position(4.0, 4.0)]])]], 8.0, 8.0, [Position(0.0, 0.0)])
+    shape_path: List[List[Position]] = []
+    for i in range(1, 25):
+        shape_path.append([
+          Position((4.0) * math.cos((i % 24) * 2 * math.pi/24), 
+           (4.0) * math.sin((i % 24) * 2 * math.pi/24)),
+          Position((4.0) * math.cos(((i+1) % 24) * 2 * math.pi/24), 
+           (4.0) * math.sin(((i+1) % 24) * 2 * math.pi/24)),
+        ])
+    footprints["pad"] = Footprint([[], [], [Shape(shape_path)]], 8.0, 8.0, [Position(0.0, 0.0)])
 
     for (i, part) in enumerate(parts):
         """

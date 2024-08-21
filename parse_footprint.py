@@ -3,7 +3,7 @@ from circuits import Footprint
 from pyparsing import *
 import math
 from typing import List
-from helpers import Position
+from helpers import Position, define_circle, calculate_rad
 
 def _parse_footprint(text):
   def _paren_clause(keyword, subclause):
@@ -59,6 +59,7 @@ def _parse_footprint(text):
   # Shape Descriptor
   at_2d = Group(_paren_clause('at', number('x') + number('y')))('at')
   start = Group(_paren_clause('start', number('x') + number('y')))('start')
+  mid = Group(_paren_clause('mid', number('x') + number('y')))('mid')
   end = Group(_paren_clause('end', number('x') + number('y')))('end')
   width = _paren_clause('width', number('width'))
   type = _paren_clause('type', anystring('type'))
@@ -73,9 +74,11 @@ def _parse_footprint(text):
   fp_line = Group(_paren_clause('fp_line', start & end & stroke & layer & uuid))
   fp_text = Group(_paren_clause('fp_text', keyword('author') + qstring('text') + (at & layer & uuid & effects)))
   fp_circle = Group(_paren_clause('fp_circle', center('center_pos') & end & stroke & fill & layer & uuid))
+  fp_arc = Group(_paren_clause('fp_arc', start & mid & end & stroke & layer & uuid))
   lines = ZeroOrMore(fp_line)('lines')
   texts = ZeroOrMore(fp_text)('texts')
   circles = ZeroOrMore(fp_circle)('circles')
+  arcs = ZeroOrMore(fp_arc)('arcs')
 
   # Pad
   pad = Group(_paren_clause('pad', qstring('number') + keyword('type') + keyword('shape') + (at_2d & size & drill & layers & remove_unused_layers & uuid)))
@@ -99,6 +102,7 @@ def _parse_footprint(text):
     lines & 
     texts &
     circles &
+    arcs & 
     pads &
     Optional(model))) + end_of_file.suppress()
   return parser.parse_string(text)
@@ -147,6 +151,7 @@ class Shape:
         }
     
 def extract_footprint(src):
+  print(src)
   footprint = parse_footprint(src)
   pads_data = list(map(lambda pad: {"number": pad.number, "type": pad.type[0], "shape": pad.shape[0], 
                                "at": {"x": pad.at.x[0], "y": pad.at.y[0]}, "size": {"width": pad.size.width[0], "height": pad.size.height[0]}, 
@@ -161,6 +166,11 @@ def extract_footprint(src):
                                       "end": {"x": circle.end.x[0], "y": circle.end.y[0]}, 
                                       "stroke": {"width": circle.stroke.width[0], "type": circle.stroke.type}, 
                                       "layer": circle.layer, "uuid": circle.uuid}, footprint.circles))
+  arcs_data = list(map(lambda arc: {"start": {"x": arc.start.x[0], "y": arc.start.y[0]}, 
+                                    "mid": {"x": arc.mid.x[0], "y": arc.mid.y[0]}, 
+                                    "end": {"x": arc.end.x[0], "y": arc.end.y[0]},
+                                    "stroke": {"width": arc.stroke.width[0], "type": arc.stroke.type},
+                                    "layer": arc.layer, "uuid": arc.uuid}, footprint.arcs))
   paths = list(map(lambda path: {"start": (float(path["start"]["x"]), float(path["start"]["y"])), 
                                  "end": (float(path["end"]["x"]), float(path["end"]["y"])),
                                  "layer": path["layer"]}, lines_data))
@@ -169,11 +179,25 @@ def extract_footprint(src):
     radius = math.sqrt(pow(float(circle["end"]["x"]) - float(circle["center"]["x"]), 2) + 
                        pow(float(circle["end"]["y"]) - float(circle["center"]["y"]), 2))
     for i in range(1, 25):
-      paths.append({"start": (float(radius * math.cos((i % 24) * 2 * math.pi/24)), 
-                              float(radius * math.sin((i % 24) * 2 * math.pi/24))),
-                    "end": (float(radius * math.cos(((i - 1) % 24) * 2 * math.pi/24)), 
-                            float(radius * math.sin(((i - 1) % 24) * 2 * math.pi/24))),
+      paths.append({"start": (float(radius * math.cos((i % 24) * 2 * math.pi/24)) + float(circle["center"]["x"]), 
+                              float(radius * math.sin((i % 24) * 2 * math.pi/24)) + float(circle["center"]["y"])),
+                    "end": (float(radius * math.cos(((i - 1) % 24) * 2 * math.pi/24)) + float(circle["center"]["x"]), 
+                            float(radius * math.sin(((i - 1) % 24) * 2 * math.pi/24)) + float(circle["center"]["y"])),
                     "layer": circle["layer"]})
+  
+  for arc in arcs_data:
+    (center, radius) = define_circle(Position(float(arc["start"]["x"]), float(arc["start"]["y"])),
+                                     Position(float(arc["mid"]["x"]), float(arc["mid"]["y"])),
+                                     Position(float(arc["end"]["x"]), float(arc["end"]["y"])))
+    start_rad = calculate_rad(Position(float(arc["start"]["x"]), float(arc["start"]["y"])), center)
+    end_rad = calculate_rad(Position(float(arc["end"]["x"]), float(arc["end"]["y"])), center)
+    rad_diff = end_rad - start_rad
+    for i in range(1, 25):
+      paths.append({"start": (float(radius * math.cos(i * rad_diff/24 + start_rad)) + center.x, 
+                              float(radius * math.sin(i * rad_diff/24 + start_rad)) + center.y),
+                    "end": (float(radius * math.cos((i - 1) * rad_diff/24 + start_rad)) + center.x,
+                            float(radius * math.sin((i - 1) * rad_diff/24 + start_rad)) + center.y),
+                    "layer": arc["layer"]})
 
   front_courtyard_paths = list(filter(lambda line: line["layer"] == "F.CrtYd", paths))
   front_silks_paths = list(filter(lambda line: line["layer"] == "F.SilkS", paths))
@@ -206,38 +230,71 @@ def extract_footprint(src):
   
   output_fcrtyd = [Shape(shape_fcrtyd)]
   output_silks = [Shape(shape_silks)]
-
       
   output_cu: List[Shape] = []
 
   for pad in pads_data:
     shape_path = []
     if pad["shape"] == "rect":
-      pad_pos = pad["at"]
+      pad_pos = Position(float(pad["at"]["x"]), float(pad["at"]["y"]))
+      pad_width = float(pad["size"]["width"])
+      pad_height = float(pad["size"]["height"])
+
+      if pad_pos.x < x_middle:
+        pad_pos.x -= pad_width/2
+        pad_width *= 2
+      elif pad_pos.x > x_middle:
+        pad_pos.x += pad_width/2
+        pad_width *= 2
+
+      if pad_pos.y < y_middle:
+        pad_pos.y -= pad_height/2
+        pad_height *= 2
+      elif pad_pos.y > y_middle:
+        pad_pos.y += pad_height/2
+        pad_height *= 2
+      
       shape_path.append([
-        Position(5.0 * (float(pad["size"]["width"])/2) + 5.0 * (float(pad_pos["x"]) - x_middle), 5.0 * (float(pad["size"]["height"])/2) + 5.0 * (float(pad_pos["y"]) - y_middle)),
-        Position(5.0 * (float(pad["size"]["width"])/2) + 5.0 * (float(pad_pos["x"]) - x_middle), -5.0 * (float(pad["size"]["height"])/2) + 5.0 * (float(pad_pos["y"]) - y_middle)),
+        Position(5.0 * (pad_width/2) + 5.0 * (pad_pos.x - x_middle), 5.0 * (pad_height/2) + 5.0 * (pad_pos.y - y_middle)),
+        Position(5.0 * (pad_width/2) + 5.0 * (pad_pos.x - x_middle), -5.0 * (pad_height/2) + 5.0 * (pad_pos.y - y_middle)),
       ])
       shape_path.append([
-        Position(5.0 * (float(pad["size"]["width"])/2) + 5.0 * (float(pad_pos["x"]) - x_middle), -5.0 * (float(pad["size"]["height"])/2) + 5.0 * (float(pad_pos["y"]) - y_middle)),
-        Position(-5.0 * (float(pad["size"]["width"])/2) + 5.0 * (float(pad_pos["x"]) - x_middle), -5.0 * (float(pad["size"]["height"])/2) + 5.0 * (float(pad_pos["y"]) - y_middle)),
+        Position(5.0 * (pad_width/2) + 5.0 * (pad_pos.x - x_middle), -5.0 * (pad_height/2) + 5.0 * (pad_pos.y - y_middle)),
+        Position(-5.0 * (pad_width/2) + 5.0 * (pad_pos.x - x_middle), -5.0 * (pad_height/2) + 5.0 * (pad_pos.y - y_middle)),
       ])
       shape_path.append([
-        Position(-5.0 * (float(pad["size"]["width"])/2) + 5.0 * (float(pad_pos["x"]) - x_middle), -5.0 * (float(pad["size"]["height"])/2) + 5.0 * (float(pad_pos["y"]) - y_middle)),
-        Position(-5.0 * (float(pad["size"]["width"])/2) + 5.0 * (float(pad_pos["x"]) - x_middle), 5.0 * (float(pad["size"]["height"])/2) + 5.0 * (float(pad_pos["y"]) - y_middle)),
+        Position(-5.0 * (pad_width/2) + 5.0 * (pad_pos.x - x_middle), -5.0 * (pad_height/2) + 5.0 * (pad_pos.y - y_middle)),
+        Position(-5.0 * (pad_width/2) + 5.0 * (pad_pos.x - x_middle), 5.0 * (pad_height/2) + 5.0 * (pad_pos.y - y_middle)),
       ])
       shape_path.append([
-        Position(-5.0 * (float(pad["size"]["width"])/2) + 5.0 * (float(pad_pos["x"]) - x_middle), 5.0 * (float(pad["size"]["height"])/2) + 5.0 * (float(pad_pos["y"]) - y_middle)),
-        Position(5.0 * (float(pad["size"]["width"])/2) + 5.0 * (float(pad_pos["x"]) - x_middle), 5.0 * (float(pad["size"]["height"])/2) + 5.0 * (float(pad_pos["y"]) - y_middle)),
+        Position(-5.0 * (pad_width/2) + 5.0 * (pad_pos.x - x_middle), 5.0 * (pad_height/2) + 5.0 * (pad_pos.y - y_middle)),
+        Position(5.0 * (pad_width/2) + 5.0 * (pad_pos.x - x_middle), 5.0 * (pad_height/2) + 5.0 * (pad_pos.y - y_middle)),
       ])
     if pad["shape"] == "oval" or pad["shape"] == "circle":
+      pad_pos = Position(float(pad["at"]["x"]), float(pad["at"]["y"]))
+      pad_width = float(pad["size"]["width"])
+      pad_height = float(pad["size"]["height"])
+
+      if pad_pos.x < x_middle:
+        pad_pos.x -= pad_width/2
+        pad_width *= 2
+      elif pad_pos.x > x_middle:
+        pad_pos.x += pad_width/2
+        pad_width *= 2
+
+      if pad_pos.y < y_middle:
+        pad_pos.y -= pad_height/2
+        pad_height *= 2
+      elif pad_pos.y > y_middle:
+        pad_pos.y += pad_height/2
+        pad_height *= 2
+
       for i in range(1, 25):
-        pad_pos = pad["at"]
         shape_path.append([
-          Position(5.0 * ((float(pad["size"]["width"])/2) * math.cos((i % 24) * 2 * math.pi/24) + float(pad_pos["x"]) - x_middle), 
-           5.0 * ((float(pad["size"]["height"])/2) * math.sin((i % 24) * 2 * math.pi/24) + float(pad_pos["y"]) - y_middle)),
-          Position(5.0 * ((float(pad["size"]["width"])/2) * math.cos((i % 24) * 2 * math.pi/24) + float(pad_pos["x"]) - x_middle), 
-           5.0 * ((float(pad["size"]["height"])/2) * math.sin((i % 24) * 2 * math.pi/24) + float(pad_pos["y"]) - y_middle)),
+          Position(5.0 * ((pad_width/2) * math.cos((i % 24) * 2 * math.pi/24) + pad_pos.x - x_middle), 
+           5.0 * ((pad_height/2) * math.sin((i % 24) * 2 * math.pi/24) + pad_pos.y - y_middle)),
+          Position(5.0 * ((pad_width/2) * math.cos(((i + 1) % 24) * 2 * math.pi/24) + pad_pos.x - x_middle), 
+           5.0 * ((pad_height/2) * math.sin(((i + 1) % 24) * 2 * math.pi/24) + pad_pos.y - y_middle)),
         ])
     output_cu.append(Shape(shape_path))
       

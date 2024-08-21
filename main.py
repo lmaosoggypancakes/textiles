@@ -14,6 +14,7 @@ from pyparsing.exceptions import ParseException
 from fastapi.middleware.cors import CORSMiddleware
 from parse_netlist import extract_netlist
 from circuits import *
+from svg_new import circuit_to_svg
 
 class File(BaseModel):
     data: str
@@ -168,13 +169,17 @@ async def ws(socket: WebSocket):
                     path = create_r_zigzag((x1, y1), (x2, y2), stretchification, depth)
                     new_points.append(path)
             await socket.send_json({"label": "paths", "nodes": [node.serialize() for node in new_nodes], "points": new_points})
-        elif payload["label"] == "give_svg_pwease":
-            dict_nodes = payload["nodes"]
-            new_nodes = list(map(lambda d: PhysicalNode.from_dict(d), dict_nodes))
-            points = payload["points"]
-            new_connections = getNewConnections(netlist["nets"], new_nodes)
-            
-            await socket.send_json({"label": "svg", "file": str(render_graph(new_nodes, points))})
+        elif payload["label"] == "get_svg":
+            # dict_nodes = payload["nodes"]
+            # new_nodes = list(map(lambda d: PhysicalNode.from_dict(d), dict_nodes))
+            # points = payload["points"]
+            # new_connections = getNewConnections(netlist["nets"], new_nodes)
+            circuit = payload["circuit"]
+            svgs = circuit_to_svg(circuit)
+            for svg_ref in svgs:
+                print(svgs[svg_ref].as_svg())
+                svgs[svg_ref].save_svg(f"{svg_ref}.svg")
+            await socket.send_json({"label": "svg", "file": ""})
 #         # messing around with this for a bit
 #         # if n = stretchification on a given connection of length x, we convert the straight line to an equation of y=sin(nt), 0<=t<=x
 #         # given y=sin(nt) which is continous, to convert to point-to's we sample 2n-times (peak-to-peak), so ~~~ becomes /\/\/\/\/\/\/\/\

@@ -27,6 +27,37 @@ class Position:
             "x": self.x,
             "y": self.y
         }
+    
+def rotate_pos_90(p: Position):
+    return Position(p.y, -p.x)
+    
+def define_circle(p1: Position, p2: Position, p3: Position):
+    """
+    Returns the center and radius of the circle passing the given 3 points.
+    In case the 3 points form a line, returns (None, infinity).
+    """
+    temp = p2.x * p2.x + p2.y * p2.y
+    bc = (p1.x * p1.x + p1.y * p1.y - temp) / 2
+    cd = (temp - p3.x * p3.x - p3.y * p3.y) / 2
+    det = (p1.x - p2.x) * (p2.y - p3.y) - (p2.x - p3.x) * (p1.y - p2.y)
+    
+    if abs(det) < 1.0e-6:
+        return (None, math.inf)
+    
+    # Center of circle
+    cx = (bc*(p2.y - p3.y) - cd*(p1.y - p2.y)) / det
+    cy = ((p1.x - p2.x) * cd - (p2.x - p3.x) * bc) / det
+    
+    radius = math.sqrt((cx - p1.x)**2 + (cy - p1.y)**2)
+    return (Position(cx, cy), radius)
+
+def calculate_rad(p1: Position, center: Position):
+    offset_y = p1.y - center.y
+    offset_x = p1.x - center.x
+    radians = math.atan2(-offset_y, offset_x)
+    if (radians < 0):
+        radians += 2 * math.pi
+    return radians
 
 
 def create_n_zigzag(one, two, n, zig_size=1):
