@@ -31,6 +31,7 @@ from __future__ import print_function
 from __future__ import division
 from __future__ import absolute_import
 from builtins import open
+import os
 
 try:
     from future import standard_library
@@ -192,7 +193,9 @@ def extract_netlist(src):
     netlist = parse_netlist(src)
     nets = list(map(lambda net: {"name": net.name, "code": net.code, "pins": list(map(lambda pin: {"ref": pin.ref, "num": pin.num}, net.nodes))}, netlist.nets))
     parts = list(map(lambda part: {"ref": part.ref, "value": part.value, "name": part.name, "footprint": part.footprint}, netlist.parts))
-    return (nets, parts)
+    print(netlist.source)
+    name = os.path.basename(netlist.source)
+    return (nets, parts, name)
     # print(netlist)
 
 extract_netlist("kousyuukai.net")

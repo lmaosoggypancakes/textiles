@@ -15,6 +15,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from parse_netlist import extract_netlist
 from circuits import *
 from svg_new import circuit_to_svg
+import json
 
 class File(BaseModel):
     data: str
@@ -46,6 +47,7 @@ class Netlist(BaseModel):
     # libraries: List[Library]
     parts: List[Part]
     nets: List[Net]
+    name: str
 
 # class Constraint(BaseModel):
     # node: PhysicalNode
@@ -75,10 +77,11 @@ def parse_file(data: File) -> Netlist:
         # netlist = parse_netlist(data.data)
         # nets = list(map(lambda net: {"name": net.name, "code": net.code, "pins": list(map(lambda pin: {"ref": pin.ref, "num": pin.num}, net.pins))}, netlist.nets))
         # parts = list(map(lambda part: {"ref": part.ref, "value": part.value, "name": part.name}, netlist.parts))
-        (nets, parts) = extract_netlist(data.data)
+        (nets, parts, name) = extract_netlist(data.data)
         return {
             "nets": nets,
-            "parts": parts
+            "parts": parts,
+            "name": name
         }
     except ParseException as e:
         print(f"There was an error: {e}")
@@ -99,7 +102,7 @@ async def ws(socket: WebSocket):
                 socket.send_json({"label": "message", "message": "You have already set your netlist in this transaction."})
             else:
                 netlist = payload["data"]
-                circuit = create_simple_circuit(netlist["nets"], netlist["parts"])
+                circuit = create_simple_circuit(netlist["nets"], netlist["parts"], netlist["name"])
 
                 await socket.send_json({"label": "graph", "circuit": circuit.serialize()})
 
@@ -180,6 +183,11 @@ async def ws(socket: WebSocket):
                 print(svgs[svg_ref].as_svg())
                 svgs[svg_ref].save_svg(f"{svg_ref}.svg")
             await socket.send_json({"label": "svg", "file": ""})
+        elif payload["label"] == "save_json":
+            circuit = payload["circuit"]
+            name = circuit["name"]
+            with open(name + '.json', "w") as fp:
+                json.dump(circuit, fp)
 #         # messing around with this for a bit
 #         # if n = stretchification on a given connection of length x, we convert the straight line to an equation of y=sin(nt), 0<=t<=x
 #         # given y=sin(nt) which is continous, to convert to point-to's we sample 2n-times (peak-to-peak), so ~~~ becomes /\/\/\/\/\/\/\/\

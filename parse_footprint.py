@@ -69,6 +69,7 @@ def _parse_footprint(text):
   xyz = Group(_paren_clause('xyz', number('x') + number('y') + number('z')))
   center = Group(_paren_clause('center', number('x') + number('y')))('center_pos')
   fill = _paren_clause('fill', anystring('fill'))
+  roundrect_rratio = _paren_clause('roundrect_rratio', number('ratio'))
 
   # Shapes
   fp_line = Group(_paren_clause('fp_line', start & end & stroke & layer & uuid))
@@ -81,7 +82,7 @@ def _parse_footprint(text):
   arcs = ZeroOrMore(fp_arc)('arcs')
 
   # Pad
-  pad = Group(_paren_clause('pad', qstring('number') + keyword('type') + keyword('shape') + (at_2d & size & drill & layers & remove_unused_layers & uuid)))
+  pad = Group(_paren_clause('pad', qstring('number') + keyword('type') + keyword('shape') + (at_2d & size & Optional(drill) & layers & Optional(remove_unused_layers) & Optional(roundrect_rratio) & Optional(uuid))))
   pads = ZeroOrMore(pad)('pads')
 
   # Model
@@ -139,7 +140,6 @@ def parse_footprint(src, tool='kicad'):
     # OK, that didn't work so well...
     logging.error('Unsupported ECAD tool library: {}'.format(tool))
     raise Exception
-  
 
 class Shape:
     def __init__(self, paths: List[List[Position]]):
@@ -155,8 +155,7 @@ def extract_footprint(src):
   footprint = parse_footprint(src)
   pads_data = list(map(lambda pad: {"number": pad.number, "type": pad.type[0], "shape": pad.shape[0], 
                                "at": {"x": pad.at.x[0], "y": pad.at.y[0]}, "size": {"width": pad.size.width[0], "height": pad.size.height[0]}, 
-                               "drill": pad.drill[0], "layers": list(pad.layers),
-                               "removed_unused_layers": pad.removed_unused_layers, "uuid": pad.uuid}, footprint.pads))
+                               "layers": list(pad.layers), "uuid": pad.uuid}, footprint.pads))
   pins_data = list(map(lambda pad: (float(pad["at"]["x"]), float(pad["at"]["y"])), pads_data))
   lines_data = list(map(lambda line: {"start": {"x": line.start.x[0], "y": line.start.y[0]}, 
                                       "end": {"x": line.end.x[0], "y": line.end.y[0]}, 
@@ -235,7 +234,7 @@ def extract_footprint(src):
 
   for pad in pads_data:
     shape_path = []
-    if pad["shape"] == "rect":
+    if pad["shape"] == "rect" or pad["shape"] == "roundrect":
       pad_pos = Position(float(pad["at"]["x"]), float(pad["at"]["y"]))
       pad_width = float(pad["size"]["width"])
       pad_height = float(pad["size"]["height"])
@@ -275,17 +274,19 @@ def extract_footprint(src):
       pad_width = float(pad["size"]["width"])
       pad_height = float(pad["size"]["height"])
 
-      if pad_pos.x < x_middle:
+      pad_x_diff = pad_pos.x - x_middle
+
+      if pad_pos.x < x_middle and abs(pad_x_diff) > 0:
         pad_pos.x -= pad_width/2
         pad_width *= 2
-      elif pad_pos.x > x_middle:
+      elif pad_pos.x > x_middle and abs(pad_x_diff) > 0:
         pad_pos.x += pad_width/2
         pad_width *= 2
 
-      if pad_pos.y < y_middle:
+      if pad_pos.y < y_middle and abs(pad_x_diff) == 0:
         pad_pos.y -= pad_height/2
         pad_height *= 2
-      elif pad_pos.y > y_middle:
+      elif pad_pos.y > y_middle and abs(pad_x_diff) == 0:
         pad_pos.y += pad_height/2
         pad_height *= 2
 

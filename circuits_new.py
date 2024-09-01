@@ -42,15 +42,17 @@ class Footprint:
         }
     
 class ConnectionNode:
-    def __init__(self, ref: str, pin: int | str, pos: Position = Position(0, 0)):
+    def __init__(self, ref: str, pin: int | str, net_name: str, pos: Position = Position(0, 0)):
         self.ref = ref
         self.pin = pin
         self.pos = pos
+        self.net_name = net_name
     def serialize(self):
         return {
             "ref": self.ref,
             "pin": self.pin,
-            "pos": self.pos.serialize()
+            "pos": self.pos.serialize(),
+            "net_name": self.net_name
         }
 
 class Trace:
@@ -59,6 +61,10 @@ class Trace:
         self.a = a
         self.b = b
         self.points: List[Position] = []
+        if a.net_name == b.net_name:
+            self.net_name = a.net_name
+        else:
+            raise Exception("Node a and b are not in the same net.")
     def add_via(self, pos: Position, idx: int):
         self.points.insert(idx, pos)
     def serialize(self):
@@ -66,11 +72,12 @@ class Trace:
             "ref": self.ref,
             "a": self.a.serialize(),
             "b": self.b.serialize(),
-            "points": list(map(lambda p: p.serialize(), self.points))
+            "points": list(map(lambda p: p.serialize(), self.points)),
+            "net_name": self.net_name
         }
 
 class Component:
-    def __init__(self, ref: str, name: str, pins: int, pin_coords: List[Position], pos: Position, width: float, height: float, is_pad = False):
+    def __init__(self, ref: str, name: str, pins: int, pin_coords: List[Position], pos: Position, width: float, height: float, net_names: List[str], is_pad = False):
         if ref == "":
             raise Exception("no ref")
         if name == "":
@@ -87,9 +94,13 @@ class Component:
         self.height = height
         self.is_pad = is_pad
         self.angle = 0
+        self.net_names = net_names
 
     def get_pin_coord(self, pin_num: int):
         return self.pin_coords[pin_num - 1]
+    
+    def get_net_name(self, pin_num: int):
+        return self.net_names[pin_num - 1]
 
     def __eq__(self, other):
         return self.ref == other.ref # REFS SHOULD BE UNIQUE
@@ -104,7 +115,8 @@ class Component:
             "width": self.width,
             "height": self.height,
             "is_pad": self.is_pad,
-            "angle": self.angle
+            "angle": self.angle,
+            "net_names": self.net_names,
         }
 
 def get_pad_pos(pad_pos: int, r: float):
@@ -176,22 +188,23 @@ class Module:
                 new_pad_pos = get_pad_pos(j, radius)
                 # TODO: calculate connection node pos
                 new_pad_ref = f"PAD-{c.ref}-{pin_num}"
+                new_pad_net_name = c.get_net_name(pin_num)
                 new_pad = Component(new_pad_ref, f"PAD-{len(self.pads) + 1}",
-                                    1, [Position(0.0, 0.0)], new_pad_pos, 8.0, 8.0, True)
+                                    1, [Position(0.0, 0.0)], new_pad_pos, 8.0, 8.0, [new_pad_net_name], True)
                 self.pads.append(new_pad)
                 self.pad_refs.append(new_pad_ref)
                 """
                 Memo the connections to make, because pad is not added to components yet
                 """
-                conns.append([c.ref, pin_num, new_pad_ref, 1])
+                conns.append([c.ref, pin_num, new_pad_ref, 1, new_pad_net_name])
         for p in self.pads:
             self.components[p.ref] = p
         for c in conns:
-            self.connect(c[0], c[1], c[2], c[3])
+            self.connect(c[0], c[1], c[2], c[3], c[4])
 
         self.pos = pos
 
-    def connect(self, a_ref: str, a_pin: int, b_ref: str, b_pin: int, vias=[]):
+    def connect(self, a_ref: str, a_pin: int, b_ref: str, b_pin: int, net_name: str, vias=[]):
         """
         Connect components `a` and `b` by pin `i` of `a` to pin `j` of `b`, with given via points.
         `a` and `b` must not be via points
@@ -199,8 +212,8 @@ class Module:
         # TODO: Calculate the connnode position here
         a_component = self.components[a_ref]
         b_component = self.components[b_ref]
-        a = ConnectionNode(a_ref, a_pin, a_component.get_pin_coord(a_pin) + a_component.pos)
-        b = ConnectionNode(b_ref, b_pin, b_component.get_pin_coord(b_pin) + b_component.pos)
+        a = ConnectionNode(a_ref, a_pin, net_name, a_component.get_pin_coord(a_pin) + a_component.pos)
+        b = ConnectionNode(b_ref, b_pin, net_name, b_component.get_pin_coord(b_pin) + b_component.pos)
         trace = Trace(a, b, vias)
         self.connections[trace.ref] = trace
 
@@ -261,7 +274,7 @@ class Layer:
                 self.component_to_module[c_ref] = module.ref
 
 
-    def connect(self, a_ref: str, a_pin: int, b_ref: str, b_pin: int):
+    def connect(self, a_ref: str, a_pin: int, b_ref: str, b_pin: int, net_name: str):
         """
         Connect modules `a` and `b` by pin `i` of `a` to pin `j` of `b`, with given via points.
         `a` and `b` must not be via points
@@ -286,8 +299,8 @@ class Layer:
         if isinstance(b_pin, str):
             b_pin_coord = b_module.components[b_pin].get_pin_coord(1) + b_module.components[b_pin].pos + b_module.pos
 
-        a = ConnectionNode(a_ref, a_pin, a_pin_coord)
-        b = ConnectionNode(b_ref, b_pin, b_pin_coord)
+        a = ConnectionNode(a_ref, a_pin, net_name, a_pin_coord)
+        b = ConnectionNode(b_ref, b_pin, net_name, b_pin_coord)
 
         trace = Trace(a, b)
         self.connections[trace.ref] = trace
@@ -332,10 +345,11 @@ class Layer:
         }
         
 class Circuit:
-    def __init__(self, layers: List[Layer], footprints: dict[str, Footprint]):
+    def __init__(self, layers: List[Layer], footprints: dict[str, Footprint], name):
         self.layers = dict(list(map(lambda l: (l.ref, l), layers)))
         self.vias: List[Module] = []
         self.footprints: dict[str, Footprint] = footprints
+        self.name = name
 
     def add_via(self, pos: Position, layer_refs = []):
         new_ref = f"VIA-{'-'.join(layer_refs)}-{len(self.vias)}"
@@ -348,10 +362,23 @@ class Circuit:
 
     def serialize(self):
         return {
+            "name": self.name,
             "layers": dict(list(map(lambda ref: (ref, self.layers[ref].serialize()), self.layers))),
             "vias": list(map(lambda v: v.serialize(), self.vias)),
             "footprints": dict(list(map(lambda ref: (ref, self.footprints[ref].serialize()), self.footprints)))
         }
+
+def get_net_names(nets, ref):
+    temp_net_names = []
+    for net in nets:
+        for node in net["pins"]:
+            if ref == node["ref"]:
+                temp_net_names.append({"name": net["name"], "pin": int(node["num"])})
+    net_names = [""] * len(temp_net_names)
+    for name in temp_net_names:
+        print(name)
+        net_names[int(name["pin"]) - 1] = name["name"]
+    return net_names
 
 
 """
@@ -359,7 +386,7 @@ nets: list[{name: str, code: str, pins: list[{ref: str, pin: str}]}]
 parts: list[{ref: str, value: str, name: str, footprint: str}]
 """
 
-def create_simple_circuit(nets, parts):
+def create_simple_circuit(nets, parts, name):
     footprints: dict[str, Footprint] = {}
     modules: list[Module] = []
     circuit_radius = 150
@@ -388,7 +415,8 @@ def create_simple_circuit(nets, parts):
         footprints[part["ref"]] = footprint
 
         new_component = Component(part["ref"], part["name"], len(footprint.pins), 
-                                  footprint.pins, Position(0.0, 0.0), footprint.width, footprint.height, False)
+                                  footprint.pins, Position(0.0, 0.0), footprint.width, footprint.height, 
+                                  get_net_names(nets, part["ref"]), False)
         angle = 2 * math.pi * i/len(parts)
         new_pos = Position(100+circuit_radius*(1 + math.cos(angle)), 100+circuit_radius*(1 + math.sin(angle)))
         modules.append(Module([new_component], new_pos, 30.0, False))
@@ -403,8 +431,8 @@ def create_simple_circuit(nets, parts):
             b_module = layer.get_module_of_component(b_component_ref)
 
             layer.connect(a_module.ref, a_module.get_pad_ref_of_component_pin(a_component_ref, net["pins"][i - 1]["num"]), 
-                          b_module.ref, b_module.get_pad_ref_of_component_pin(b_component_ref, net["pins"][i]["num"]))
+                          b_module.ref, b_module.get_pad_ref_of_component_pin(b_component_ref, net["pins"][i]["num"]), net["name"])
 
-    circuit = Circuit([layer], footprints)
+    circuit = Circuit([layer], footprints, name)
 
     return circuit
